@@ -1,3 +1,8 @@
+__author__ = __maintainer__ = "Bernhard Reuter"
+__email__ = "bernhard-reuter@gmx.de"
+__copyright__ = "Copyright 2022, Bernhard Reuter"
+
+
 from datetime import datetime
 import joblib
 from joblib import Parallel, delayed
@@ -27,6 +32,16 @@ import sklearn.pipeline
 from sklearn.model_selection._split import _BaseKFold
 import warnings
 from typing import Dict, List, Tuple, Union, Optional, ClassVar, Any
+
+__all__ = [
+    'generate_timestamp',
+    'save_model',
+    'save_json',
+    'filename_generator',
+    'load_model',
+    'RepeatedStratifiedNestedCV',
+    'RepeatedGridSearchCV'
+]
 
 
 def generate_timestamp():

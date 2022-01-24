@@ -1,3 +1,8 @@
+__author__ = __maintainer__ = "Bernhard Reuter"
+__email__ = "bernhard-reuter@gmx.de"
+__copyright__ = "Copyright 2022, Bernhard Reuter"
+
+
 import pytest
 import numpy as np
 from numpy.testing import assert_allclose as assert_allclose_np

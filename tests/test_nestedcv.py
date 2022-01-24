@@ -1,3 +1,8 @@
+__author__ = __maintainer__ = "Bernhard Reuter"
+__email__ = "bernhard-reuter@gmx.de"
+__copyright__ = "Copyright 2022, Bernhard Reuter"
+
+
 import pytest
 import numpy as np
 from sklearn.datasets import make_classification
@@ -5,8 +10,8 @@ from sklearn.model_selection import train_test_split
 from pandas.util.testing import assert_frame_equal
 from pandas import DataFrame
 from sklearn.svm import SVC
-from .conftest import dummy_classifier, assert_allclose
-from . import nestedcv as ncv
+from tests.conftest import dummy_classifier, assert_allclose
+import nestedcv as ncv
 import re
 
 
