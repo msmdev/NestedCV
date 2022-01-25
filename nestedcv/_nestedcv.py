@@ -980,7 +980,7 @@ class RepeatedGridSearchCV:
         Dictionary with parameters names (str) as keys and lists of parameter
         settings to try as values, or a list of such dictionaries.
 
-    scoring : str or list, default: 'precision_recall_auc'
+    scoring : str or list, default='precision_recall_auc'
             Can be a string or a list with elements out of ``'balanced_accuracy'``,
             ``'brier_loss'``, ``'f1'``, ``'f2'``, ``'log_loss'``, ``'mcc'``,
             ``'pseudo_f1'``, ``'pseudo_f2'``, ``'sensitivity'``, ``'average_precision'``,
@@ -994,14 +994,14 @@ class RepeatedGridSearchCV:
             ``predict_proba`` method for predicting binary class probabilities in [0,1].
 
     cv : int or cross-validatior (a.k.a. CV splitter),
-    default: StratifiedKFold(n_splits=5, shuffle=True)
+    default=StratifiedKFold(n_splits=5, shuffle=True)
         Determines the cross-validation splitting strategy.
         Possible inputs for ``cv`` are:
         - ``None``, to use the default 5-fold stratified cross validation,
         - int, to specify the number of folds in a ``StratifiedKFold``,
         - CV splitter.
 
-    n_jobs : int or None, default: None
+    n_jobs : int or None, default=None
         Number of jobs of GridSearchCV to run in parallel.
         ``None`` means ``1`` unless in a joblib.parallel_backend context.
         ``-1`` means using all processors.
@@ -1009,7 +1009,7 @@ class RepeatedGridSearchCV:
     Nexp : int, default=10
         Number of CV repetitions.
 
-    save_to : dict or None, default: None
+    save_to : dict or None, default=None
         If not ``None``, the train and test indices for every split
         and ``y_proba`` and ``y_test`` for every point of the parameter
         grid will be saved.
@@ -1021,7 +1021,7 @@ class RepeatedGridSearchCV:
         date and time (formated like this: 26.03.2020_17-52-20)
         will be appended before the file extension (.npy).
 
-    reproducible : bool, default: False
+    reproducible : bool, default=False
         If ``True``, the CV splits will become reproducible by setting
         ``cv=StratifiedKFold(n_splits, shuffle=True, random_state=nexp)``
         with ``nexp`` being the iteration of the repetition loop
@@ -1461,7 +1461,7 @@ class RepeatedStratifiedNestedCV:
     cv_options : dict, default={}
         Nested cross-validation options.
 
-        'collect_rules' : bool, default: False
+        'collect_rules' : bool, default=False
             Only available, if the estimator is ``RuleBasedClassifier`` (RBC)
             with ``r_solution_`` attribute.
             If set to ``True``, the rules (disjunctions) learned by RBC during
@@ -1471,14 +1471,14 @@ class RepeatedStratifiedNestedCV:
             Otherwise, the rules can't be collected.
 
         'inner_cv' : int or cross-validatior (a.k.a. CV splitter),
-        default: StratifiedKFold(n_splits=5, shuffle=True)
+        default=StratifiedKFold(n_splits=5, shuffle=True)
             Determines the inner cross-validation splitting strategy.
             Possible inputs for ``'inner_cv'`` are:
             - int, to specify the number of folds in a ``StratifiedKFold``,
             - CV splitter.
 
-        'n_jobs' : int or None, default: None
-            Number of jobs of RepeatedGridSearchCV to run in parallel.
+        'n_jobs' : int or None, default=None
+            Number of jobs of ``RepeatedGridSearchCV`` to run in parallel.
             ``None`` means ``1`` while ``-1`` means using all processors.
 
         'Nexp1' : int, default=10
@@ -1488,26 +1488,26 @@ class RepeatedStratifiedNestedCV:
             Number of nested CV repetitions.
 
         'outer_cv' : int or cross-validatior (a.k.a. CV splitter),
-        default: StratifiedKFold(n_splits=5, shuffle=True)
+        default=StratifiedKFold(n_splits=5, shuffle=True)
             Determines the outer cross-validation splitting strategy.
             Possible inputs for ``'outer_cv'`` are:
             - integer, to specify the number of folds in a ``StratifiedKFold``,
             - CV splitter.
 
-        'refit' : bool, str, default=False
+        'refit' : bool or str, default=False
             Refit an estimator using the best found parameters (rank 1) on the whole dataset.
             For multiple metric evaluation, this needs to be a str denoting the scorer that
             would be used to find the best parameters for refitting the estimator at the end.
             The refitted estimator is made available at the ``best_estimator_`` attribute.
 
-        'reproducible' : bool, default: False
+        'reproducible' : bool, default=False
             If True, the CV splits will become reproducible by setting
             ``cv_options['outer_cv']=StratifiedKFold(n_splits, shuffle=True, random_state=nexp2)``,
             ``cv_options['inner_cv']=StratifiedKFold(n_splits, shuffle=True, random_state=nexp1)``
             with ``nexp2``, ``nexp1`` being the current iteration of the outer/inner repetition
             loop and ``n_splits`` as given in via the ``'outer_cv'`` and ``'inner_cv'`` key.
 
-        'save_best_estimator' : dict or None, default: None
+        'save_best_estimator' : dict or None, default=None
             If not ``None``, the best estimator (using the best found parameters)
             refitted on the whole dataset will be saved.
             This requires ``cv_options['refit']`` set to ``True`` or a str denoting
@@ -1522,7 +1522,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.joblib).
 
-        'save_inner_to' : dict or None, default: None
+        'save_inner_to' : dict or None, default=None
             If not ``None``, the train and test indices for every inner split
             and y_proba and y_test for every point of the parameter
             grid of the inner cross-validated grid search will be saved.
@@ -1535,7 +1535,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.npy).
 
-        'save_pr_plots' : dict or None, default: None
+        'save_pr_plots' : dict or None, default=None
             Only used, if ``cv_options['tune_threshold']=True``.
             Determines, if the Precision-Recall-Curve and a plot of Precision and Recall
             over the decision threshold (if ``cv_options['threshold_tuning_scoring']``
@@ -1553,7 +1553,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.pdf).
 
-        'save_pred' : dict or None, default: None
+        'save_pred' : dict or None, default=None
             If not ``None``, the train and test indices for every outer split
             and ``y_proba``, ``y_pred`` and ``y_test`` for every repetition and split
             of the outer repeated cross-validation will be saved.
@@ -1566,7 +1566,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.npy).
 
-        'save_to' : dict or None, default: None
+        'save_to' : dict or None, default=None
             If not ``None``, the results of all inner cross-validated Grid-Search
             iterations per outer iteration will be compiled all together in
             a single Excel workbook with one sheet per outer split and one
@@ -1589,7 +1589,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.xlsx).
 
-        'save_tt_plots' : dict or None, default: None
+        'save_tt_plots' : dict or None, default=None
             Only used, if ``cv_options['tune_threshold']=True``.
             Determines, if the Precision-Recall-Curve and a plot of Precision and Recall
             over the decision threshold (if ``cv_options['threshold_tuning_scoring']``
@@ -1607,7 +1607,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.pdf).
 
-        'scoring' : string or list, default: 'precision_recall_auc'
+        'scoring' : string or list, default='precision_recall_auc'
             Can be a string or a list with elements out of ``'balanced_accuracy'``,
             ``'brier_loss'``, ``'f1'``, ``'f2'``, ``'log_loss'``, ``'mcc'``, ``'pseudo_f1'``,
             ``'pseudo_f2'``, ``'sensitivity'``, ``'average_precision'``,
@@ -1620,7 +1620,7 @@ class RepeatedStratifiedNestedCV:
             ``'precision_recall_auc'`` or ``'roc_auc'`` the estimator must support the
             ``predict_proba`` method for predicting binary class probabilities in [0,1].
 
-        'threshold_tuning_scoring' : string or list, default: 'f2'
+        'threshold_tuning_scoring' : string or list, default='f2'
             Only used, if ``cv_options['tune_threshold']=True``.
             If a single metric is chosen as scoring (e.g. ``cv_options['scoring']='mcc'``),
             it can be one out of ``'balanced_accurracy'``, ``'f1'``, ``'f2'``,
@@ -1654,7 +1654,7 @@ class RepeatedStratifiedNestedCV:
             Choosing ``cv_options['scoring']='precision_recall_auc'``, it would be sensible
             to set ``cv_options['threshold_tuning_scoring']`` to either ``'f1'`` or ``'f2'``.
 
-        'tune_threshold' : boolean, default: True
+        'tune_threshold' : boolean, default=True
             If ``True``, perform threshold tuning on each outer training fold
             for the estimator with the best hyperparameters (found by tuning of these
             in the inner cross validation) retrained on the outer training fold.
@@ -1669,10 +1669,10 @@ class RepeatedStratifiedNestedCV:
         ----------
 
         best_inner_scores_
-            Best inner scores for each outer loop.
+            Best inner scores for each outer loop cumulated in a dict.
 
         best_inner_indices_
-            Best inner indices.
+            Best inner indices cumulated in a dict.
 
         best_params_
             All best params from the inner loop cumulated in a dict.
@@ -1727,8 +1727,22 @@ class RepeatedStratifiedNestedCV:
         Methods
         -------
 
-        fit(self, X, y)
-            Run fit.
+        fit(self, X, y[, baseline_prediction])
+            Method to run repeated stratified nested cross-validated grid-search.
+
+        predict(self, X)
+            Call predict on the estimator with the best found parameters.
+            Only available if ``cv_options['refit']=True`` and the underlying
+            estimator supports ``predict``.
+            If threshold tuning was applied, the mean of the best thresholds,
+            which maximize the threshold tuning scoring on the outer training
+            folds for the best parameters (rank 1) found during grid search,
+            is used as decision threshold for class prediction.
+
+        predict_proba(self, X)
+            Call predict_proba on the estimator with the best found parameters.
+            Only available if ``cv_options['refit']=True`` and the underlying
+            estimator supports ``predict_proba``.
     """
     metrics_proba: ClassVar[List[str]] = [
         'average_precision',
@@ -2274,7 +2288,7 @@ class RepeatedStratifiedNestedCV:
         y: np.ndarray,
         baseline_prediction: Optional[np.ndarray] = None
     ) -> None:
-        """A method to fit repeated stratified nested cross-validated grid-search.
+        """A method to run repeated stratified nested cross-validated grid-search.
 
         Parameters
         ----------
