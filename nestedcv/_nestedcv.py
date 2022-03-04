@@ -1206,8 +1206,14 @@ class RepeatedGridSearchCV:
             for (j, (train, test)) in enumerate(self.cv.split(X, y)):
                 # i. Define set X_train (y_train) as the dataset (labelset) without the I-th fold
                 # ii. Define set X_test (y_test) as the I-th fold of the dataset X (labelset y)
-                X_train, y_train = _safe_split(self.estimator, X, y, train)
-                X_test, y_test = _safe_split(self.estimator, X, y, test, train)
+                if isinstance(self.estimator, sklearn.pipeline.Pipeline):
+                    X_train, y_train = _safe_split(self.estimator.steps[-1][1], X, y, train)
+                else:
+                    X_train, y_train = _safe_split(self.estimator, X, y, train)
+                if isinstance(self.estimator, sklearn.pipeline.Pipeline):
+                    X_test, y_test = _safe_split(self.estimator.steps[-1][1], X, y, test, train)
+                else:
+                    X_test, y_test = _safe_split(self.estimator, X, y, test, train)
 
                 if isinstance(self.save_to, dict):
                     fn = f"{self.save_to['ID']}_repeat{nexp}_inner_split{j}_train_index"
@@ -2554,7 +2560,10 @@ class RepeatedStratifiedNestedCV:
             repeated_cv_results_list = []
             repeated_cv_results_as_dataframes = []
             for i, (train, test) in enumerate(zip(train_indices, test_indices)):
-                X_train, y_train = _safe_split(self.estimator, X, y, train)
+                if isinstance(self.estimator, sklearn.pipeline.Pipeline):
+                    X_train, y_train = _safe_split(self.estimator.steps[-1][1], X, y, train)
+                else:
+                    X_train, y_train = _safe_split(self.estimator, X, y, train)
                 print('Repetition %s, outer split %s:' % (str(nexp2), str(i)))
                 print('Beginning of grid search at %s.' % generate_timestamp())
                 gs.fit(X_train, y_train)
@@ -2607,8 +2616,20 @@ class RepeatedStratifiedNestedCV:
                 for i, (train, test) in enumerate(zip(train_indices, test_indices)):
                     y_dict = dict()
                     X_dict = dict()
-                    X_dict['train'], y_dict['train'] = _safe_split(self.estimator, X, y, train)
-                    X_dict['test'], y_dict['test'] = _safe_split(self.estimator, X, y, test, train)
+                    if isinstance(self.estimator, sklearn.pipeline.Pipeline):
+                        X_dict['train'], y_dict['train'] = _safe_split(
+                            self.estimator.steps[-1][1], X, y, train
+                        )
+                        X_dict['test'], y_dict['test'] = _safe_split(
+                            self.estimator.steps[-1][1], X, y, test, train
+                        )
+                    else:
+                        X_dict['train'], y_dict['train'] = _safe_split(
+                            self.estimator, X, y, train
+                        )
+                        X_dict['test'], y_dict['test'] = _safe_split(
+                            self.estimator, X, y, test, train
+                        )
 
                     index = (len(train_indices) * nexp2) + i
                     # collect hyperparameters for params_dummy dict:
