@@ -17,19 +17,19 @@ import pathlib
 import pickle
 import re
 import sklearn
-from sklearn.base import BaseEstimator, clone, TransformerMixin
+from sklearn.base import BaseEstimator, clone, TransformerMixin, is_classifier
 from sklearn.metrics import auc, average_precision_score, brier_score_loss
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.metrics import f1_score, fbeta_score, log_loss, precision_score
 from sklearn.metrics import precision_recall_curve, recall_score, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, ParameterGrid
-from sklearn.utils import check_array, check_consistent_length, check_X_y
+from sklearn.utils import check_array, check_consistent_length, check_X_y, indexable
 from sklearn.metrics._classification import _check_targets
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.metaestimators import _safe_split
 from sklearn.utils.multiclass import type_of_target
 import sklearn.pipeline
-from sklearn.model_selection._split import BaseCrossValidator
+from sklearn.model_selection._split import BaseCrossValidator, check_cv
 import warnings
 from typing import Dict, List, Tuple, Union, Optional, ClassVar, Any
 
@@ -1047,7 +1047,7 @@ class RepeatedGridSearchCV:
         Methods
         -------
 
-        fit(self, X, y)
+        fit(self, X, y[, groups])
             Run fit.
     """
     metrics_proba: ClassVar[List[str]] = [
@@ -1094,6 +1094,7 @@ class RepeatedGridSearchCV:
         if isinstance(scoring, list):
             if not len(self.scoring) == len(set(self.scoring)):
                 raise ValueError("All elements of 'scoring' must be unique.")
+        # mb use sklearn's check_cv in fit() the future instead of the following check:
         if isinstance(cv, numbers.Number):
             self.cv = StratifiedKFold(n_splits=cv, shuffle=True)
         elif issubclass(type(cv), BaseCrossValidator):
@@ -1111,6 +1112,7 @@ class RepeatedGridSearchCV:
         self,
         X: np.ndarray,
         y: np.ndarray,
+        groups: Optional[np.ndarray] = None,
     ) -> None:
 
         # Generate a timestamp used for file naming
@@ -1118,6 +1120,11 @@ class RepeatedGridSearchCV:
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
+
+        X, y, groups = indexable(X, y, groups)
+
+        # mb use sklearn's check_cv in the future:
+        # cv = check_cv(cv, y, classifier=is_classifier(self.estimator))
 
         X, y = check_X_y(X, y, estimator='RepeatedGridSearchCV')
 
@@ -1193,6 +1200,11 @@ class RepeatedGridSearchCV:
 
             # CAUTION: THIS IS A HACK TO MAKE THE RESULTS REPRODUCIBLE!!!
             if self.reproducible:
+                if groups is not None:
+                    raise ValueError(
+                        "Supplying group lables for grouped CV splitting has "
+                        "no effect when setting reproducible=True."
+                    )
                 n_splits = self.cv.get_n_splits()
                 self.cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=nexp)
 
@@ -1203,7 +1215,7 @@ class RepeatedGridSearchCV:
             y_probas_list = []
             y_tests_list = []
 
-            for (j, (train, test)) in enumerate(self.cv.split(X, y)):
+            for (j, (train, test)) in enumerate(self.cv.split(X, y, groups)):
                 # i. Define set X_train (y_train) as the dataset (labelset) without the I-th fold
                 # ii. Define set X_test (y_test) as the I-th fold of the dataset X (labelset y)
                 if isinstance(self.estimator, sklearn.pipeline.Pipeline):
@@ -1498,7 +1510,8 @@ class RepeatedStratifiedNestedCV:
             Determines the outer cross-validation splitting strategy.
             Possible inputs for ``'outer_cv'`` are:
             - integer, to specify the number of folds in a ``StratifiedKFold``,
-            - CV splitter.
+            - CV splitter,
+            - a list of CV splitters of length Nexp2.
 
         'refit' : bool or str, default=False
             Refit an estimator using the best found parameters (rank 1) on the whole dataset.
@@ -1733,7 +1746,7 @@ class RepeatedStratifiedNestedCV:
         Methods
         -------
 
-        fit(self, X, y[, baseline_prediction])
+        fit(self, X, y[, baseline_prediction, groups])
             Method to run repeated stratified nested cross-validated grid-search.
 
         predict(self, X)
@@ -1861,6 +1874,7 @@ class RepeatedStratifiedNestedCV:
 
         self.collect_rules = cv_options.get('collect_rules', False)
         inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
+        # mb use sklearn's check_cv in the future instead:
         if isinstance(inner_cv, numbers.Number):
             self.inner_cv = StratifiedKFold(n_splits=inner_cv, shuffle=True)
         elif issubclass(type(inner_cv), BaseCrossValidator):
@@ -1876,9 +1890,23 @@ class RepeatedStratifiedNestedCV:
             self.outer_cv = StratifiedKFold(n_splits=outer_cv, shuffle=True)
         elif issubclass(type(outer_cv), BaseCrossValidator):
             self.outer_cv = outer_cv
+        elif isinstance(outer_cv, list):
+            if not len(outer_cv) == self.Nexp2:
+                raise ValueError(
+                    "If supplying a list of CV splitters for the outer CV, its length must "
+                    "match the number of nested CV repetitions."
+                )
+            for cv in outer_cv:
+                if not issubclass(type(cv), BaseCrossValidator):
+                    raise ValueError(
+                        "The value of the 'outer_cv' key must be either an integer, "
+                        "to specify the number of folds, a CV splitter, or a list of "
+                        "CV splitters of length Nexp2."
+                    )
         else:
             raise ValueError("The value of the 'outer_cv' key must be either an integer, "
-                             "to specify the number of folds, or a CV splitter.")
+                             "to specify the number of folds, a CV splitter, or a list of "
+                             "CV splitters of length Nexp2.")
         self.refit = cv_options.get('refit', False)
         if not isinstance(self.refit, bool) and not isinstance(self.refit, str):
             raise ValueError("The value of the 'refit' key must bei either boolean or str.")
@@ -2292,22 +2320,27 @@ class RepeatedStratifiedNestedCV:
         self,
         X: np.ndarray,
         y: np.ndarray,
-        baseline_prediction: Optional[np.ndarray] = None
+        baseline_prediction: Optional[np.ndarray] = None,
+        groups: Optional[np.ndarray] = None,
     ) -> None:
         """A method to run repeated stratified nested cross-validated grid-search.
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             Training vector, where n_samples is the number of samples and
             n_features is the number of features.
 
-        y : array-like of shape (n_samples, n_output) or (n_samples,)
+        y : numpy.ndarray of shape (n_samples, n_output) or (n_samples,)
             Target relative to X for classification.
 
-        baseline_prediction : None or array-like of shape (n_samples,), default=None
+        baseline_prediction : None or numpy.ndarray of shape (n_samples,), default=None
             Given baseline prediction of the target.
             Used to calculate the baseline performance scores.
+
+        groups : numpy.ndarray of shape (n_samples,), default=None
+            Group labels for the samples used while splitting the dataset into train/test set.
+            Only used in conjunction with a “Group” cv instance (e.g., GroupKFold).
 
         Returns
         -------
@@ -2378,6 +2411,8 @@ class RepeatedStratifiedNestedCV:
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
+
+        X, y, groups = indexable(X, y, groups)
 
         X, y = check_X_y(X, y, estimator='RepeatedStratifiedNestedCV')
 
@@ -2532,17 +2567,35 @@ class RepeatedStratifiedNestedCV:
         # Repeated Nested CV with parameter optimization.
         for nexp2 in range(self.Nexp2):
 
+            if isinstance(self.outer_cv, list):
+                outer_cv = self.outer_cv[nexp2]
+                if self.reproducible:
+                    raise ValueError(
+                        "Supplying a list of CV splitters for the outer CV "
+                        "has no effect when setting reproducible=True."
+                    )
+            else:
+                outer_cv = self.outer_cv
+
+            # TODO: check, if is_classifier really recognizes RBC
+            outer_cv = check_cv(outer_cv, y, classifier=is_classifier(self.estimator))
+
             # CAUTION: THIS IS A HACK TO MAKE THE RESULTS REPRODUCIBLE!!!
             if self.reproducible:
+                if groups is not None:
+                    raise ValueError(
+                        "Supplying group lables for grouped CV splitting has "
+                        "no effect when setting reproducible=True."
+                    )
                 n_splits = self.outer_cv.get_n_splits()
-                self.outer_cv = StratifiedKFold(
+                outer_cv = StratifiedKFold(
                     n_splits=n_splits, shuffle=True, random_state=nexp2
                 )
 
             train_indices = []
             test_indices = []
             # for train, test in outer_cv.split(X, y):
-            for i, (train, test) in enumerate(self.outer_cv.split(X, y)):
+            for i, (train, test) in enumerate(outer_cv.split(X, y, groups)):
                 train_indices.append(train)
                 test_indices.append(test)
 
@@ -2564,9 +2617,13 @@ class RepeatedStratifiedNestedCV:
                     X_train, y_train = _safe_split(self.estimator.steps[-1][1], X, y, train)
                 else:
                     X_train, y_train = _safe_split(self.estimator, X, y, train)
+                if groups is not None:
+                    groups_train = groups[train]
+                else:
+                    groups_train = None
                 print('Repetition %s, outer split %s:' % (str(nexp2), str(i)))
                 print('Beginning of grid search at %s.' % generate_timestamp())
-                gs.fit(X_train, y_train)
+                gs.fit(X_train, y_train, groups_train)
                 print('End of grid search at %s.' % generate_timestamp())
                 print('')
                 repeated_cv_results_list.append(gs.cv_results_)
