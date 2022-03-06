@@ -29,7 +29,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.metaestimators import _safe_split
 from sklearn.utils.multiclass import type_of_target
 import sklearn.pipeline
-from sklearn.model_selection._split import _BaseKFold
+from sklearn.model_selection._split import BaseCrossValidator
 import warnings
 from typing import Dict, List, Tuple, Union, Optional, ClassVar, Any
 
@@ -1076,7 +1076,7 @@ class RepeatedGridSearchCV:
             param_grid: Union[Dict[str, List[Any]], List[Dict[str, List[Any]]]],
             *,
             scoring: str = 'precision_recall_auc',
-            cv: _BaseKFold = StratifiedKFold(n_splits=5, shuffle=True),
+            cv: BaseCrossValidator = StratifiedKFold(n_splits=5, shuffle=True),
             n_jobs: Optional[int] = None,
             Nexp: int = 10,
             save_to: Optional[Dict[str, str]] = None,
@@ -1096,7 +1096,7 @@ class RepeatedGridSearchCV:
                 raise ValueError("All elements of 'scoring' must be unique.")
         if isinstance(cv, numbers.Number):
             self.cv = StratifiedKFold(n_splits=cv, shuffle=True)
-        elif issubclass(type(cv), _BaseKFold):
+        elif issubclass(type(cv), BaseCrossValidator):
             self.cv = cv
         else:
             raise ValueError(
@@ -1863,7 +1863,7 @@ class RepeatedStratifiedNestedCV:
         inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(inner_cv, numbers.Number):
             self.inner_cv = StratifiedKFold(n_splits=inner_cv, shuffle=True)
-        elif issubclass(type(inner_cv), _BaseKFold):
+        elif issubclass(type(inner_cv), BaseCrossValidator):
             self.inner_cv = inner_cv
         else:
             raise ValueError("The value of the 'inner_cv' key must be either an integer, "
@@ -1874,7 +1874,7 @@ class RepeatedStratifiedNestedCV:
         outer_cv = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(outer_cv, numbers.Number):
             self.outer_cv = StratifiedKFold(n_splits=outer_cv, shuffle=True)
-        elif issubclass(type(outer_cv), _BaseKFold):
+        elif issubclass(type(outer_cv), BaseCrossValidator):
             self.outer_cv = outer_cv
         else:
             raise ValueError("The value of the 'outer_cv' key must be either an integer, "
