@@ -1903,6 +1903,7 @@ class RepeatedStratifiedNestedCV:
                         "to specify the number of folds, a CV splitter, or a list of "
                         "CV splitters of length Nexp2."
                     )
+            self.outer_cv = outer_cv
         else:
             raise ValueError("The value of the 'outer_cv' key must be either an integer, "
                              "to specify the number of folds, a CV splitter, or a list of "
@@ -2553,17 +2554,6 @@ class RepeatedStratifiedNestedCV:
         repeated_cv_results_lists = []
         repeated_cv_results_as_dataframes_list = []
 
-        gs = RepeatedGridSearchCV(
-            estimator=self.estimator,
-            param_grid=self.param_grid,
-            scoring=self.scoring,
-            cv=self.inner_cv,
-            n_jobs=self.n_jobs,
-            Nexp=self.Nexp1,
-            save_to=self.save_inner_to,
-            reproducible=self.reproducible
-        )
-
         # Repeated Nested CV with parameter optimization.
         for nexp2 in range(self.Nexp2):
 
@@ -2623,6 +2613,16 @@ class RepeatedStratifiedNestedCV:
                     groups_train = None
                 print('Repetition %s, outer split %s:' % (str(nexp2), str(i)))
                 print('Beginning of grid search at %s.' % generate_timestamp())
+                gs = RepeatedGridSearchCV(
+                    estimator=self.estimator,
+                    param_grid=self.param_grid,
+                    scoring=self.scoring,
+                    cv=self.inner_cv,
+                    n_jobs=self.n_jobs,
+                    Nexp=self.Nexp1,
+                    save_to=self.save_inner_to,
+                    reproducible=self.reproducible
+                )
                 gs.fit(X_train, y_train, groups_train)
                 print('End of grid search at %s.' % generate_timestamp())
                 print('')
