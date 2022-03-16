@@ -995,11 +995,11 @@ class RepeatedGridSearchCV:
 
     cv : int or cross-validatior (a.k.a. CV splitter),
     default=StratifiedKFold(n_splits=5, shuffle=True)
-        Determines the cross-validation splitting strategy.
+        Determines the inner cross-validation splitting strategy.
         Possible inputs for ``cv`` are:
-        - ``None``, to use the default 5-fold stratified cross validation,
-        - int, to specify the number of folds in a ``StratifiedKFold``,
-        - CV splitter.
+        - integer, to specify the number of folds in a ``StratifiedKFold``,
+        - CV splitter,
+        - a list of CV splitters of length Nexp.
 
     n_jobs : int or None, default=None
         Number of jobs of GridSearchCV to run in parallel.
@@ -1094,15 +1094,28 @@ class RepeatedGridSearchCV:
         if isinstance(scoring, list):
             if not len(self.scoring) == len(set(self.scoring)):
                 raise ValueError("All elements of 'scoring' must be unique.")
-        # mb use sklearn's check_cv in fit() the future instead of the following check:
         if isinstance(cv, numbers.Number):
             self.cv = StratifiedKFold(n_splits=cv, shuffle=True)
         elif issubclass(type(cv), BaseCrossValidator):
             self.cv = cv
+        elif isinstance(cv, list):
+            if not len(cv) == Nexp:
+                raise ValueError(
+                    "If supplying a list of CV splitters for 'cv', its length must "
+                    "match the number of CV repetitions."
+                )
+            for cv_ in cv:
+                if not issubclass(type(cv_), BaseCrossValidator):
+                    raise ValueError(
+                        "The value of the 'cv' key must be either an integer, "
+                        "to specify the number of folds, a CV splitter, or a list of "
+                        "CV splitters of length Nexp."
+                    )
+            self.cv = cv
         else:
-            raise ValueError(
-                "'cv' must be either an integer, to specify the number of folds, or a CV splitter."
-            )
+            raise ValueError("The value of the 'cv' key must be either an integer, "
+                             "to specify the number of folds, a CV splitter, or a list of "
+                             "CV splitters of length Nexp.")
         self.n_jobs = n_jobs
         self.Nexp = Nexp
         self.save_to = save_to
@@ -1198,6 +1211,19 @@ class RepeatedGridSearchCV:
         # 1. Repeat the following process Nexp times
         for nexp in range(self.Nexp):
 
+            if isinstance(self.cv, list):
+                cv = self.cv[nexp]
+                if self.reproducible:
+                    raise ValueError(
+                        "Supplying a list of CV splitters for 'cv' "
+                        "has no effect when setting reproducible=True."
+                    )
+            else:
+                cv = self.cv
+
+            # TODO: check, if is_classifier really recognizes RBC
+            cv = check_cv(cv, y, classifier=is_classifier(self.estimator))
+
             # CAUTION: THIS IS A HACK TO MAKE THE RESULTS REPRODUCIBLE!!!
             if self.reproducible:
                 if groups is not None:
@@ -1205,8 +1231,8 @@ class RepeatedGridSearchCV:
                         "Supplying group lables for grouped CV splitting has "
                         "no effect when setting reproducible=True."
                     )
-                n_splits = self.cv.get_n_splits()
-                self.cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=nexp)
+                n_splits = cv.get_n_splits()
+                cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=nexp)
 
             # a. Divide the dataset X (labelset y) pseudo-randomly into V folds
             # b. For I from 1 to V
@@ -1215,7 +1241,7 @@ class RepeatedGridSearchCV:
             y_probas_list = []
             y_tests_list = []
 
-            for (j, (train, test)) in enumerate(self.cv.split(X, y, groups)):
+            for (j, (train, test)) in enumerate(cv.split(X, y, groups)):
                 # i. Define set X_train (y_train) as the dataset (labelset) without the I-th fold
                 # ii. Define set X_test (y_test) as the I-th fold of the dataset X (labelset y)
                 if isinstance(self.estimator, sklearn.pipeline.Pipeline):
@@ -1492,8 +1518,9 @@ class RepeatedStratifiedNestedCV:
         default=StratifiedKFold(n_splits=5, shuffle=True)
             Determines the inner cross-validation splitting strategy.
             Possible inputs for ``'inner_cv'`` are:
-            - int, to specify the number of folds in a ``StratifiedKFold``,
-            - CV splitter.
+            - integer, to specify the number of folds in a ``StratifiedKFold``,
+            - CV splitter,
+            - a list of CV splitters of length Nexp1.
 
         'n_jobs' : int or None, default=None
             Number of jobs of ``RepeatedGridSearchCV`` to run in parallel.
@@ -1874,14 +1901,28 @@ class RepeatedStratifiedNestedCV:
 
         self.collect_rules = cv_options.get('collect_rules', False)
         inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
-        # mb use sklearn's check_cv in the future instead:
         if isinstance(inner_cv, numbers.Number):
             self.inner_cv = StratifiedKFold(n_splits=inner_cv, shuffle=True)
         elif issubclass(type(inner_cv), BaseCrossValidator):
             self.inner_cv = inner_cv
+        elif isinstance(inner_cv, list):
+            if not len(inner_cv) == self.Nexp1:
+                raise ValueError(
+                    "If supplying a list of CV splitters for the inner CV, its length must "
+                    "match the number of inner CV repetitions."
+                )
+            for cv in inner_cv:
+                if not issubclass(type(cv), BaseCrossValidator):
+                    raise ValueError(
+                        "The value of the 'inner_cv' key must be either an integer, "
+                        "to specify the number of folds, a CV splitter, or a list of "
+                        "CV splitters of length Nexp1."
+                    )
+            self.inner_cv = inner_cv
         else:
             raise ValueError("The value of the 'inner_cv' key must be either an integer, "
-                             "to specify the number of folds, or a CV splitter.")
+                             "to specify the number of folds, a CV splitter, or a list of "
+                             "CV splitters of length Nexp1.")
         self.n_jobs = cv_options.get('n_jobs', None)
         self.Nexp1 = cv_options.get('Nexp1', 10)
         self.Nexp2 = cv_options.get('Nexp2', 10)
