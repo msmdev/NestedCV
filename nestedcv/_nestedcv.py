@@ -2945,7 +2945,7 @@ class RepeatedStratifiedNestedCV:
                     timestamp=timestamp
                 )
 
-        if isinstance(self.save_to, dict):
+        if isinstance(self.save_to, dict) and self.tune_threshold:
             save_json(
                 tuning_curves,
                 self.save_to['directory'],
