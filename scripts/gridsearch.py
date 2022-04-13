@@ -1,5 +1,5 @@
 '''
-Find the best parameters using x-times repeated stratified nested cross-validated grid-search.
+Find the best parameters using x-times repeated nested stratified cross-validation.
 
 Will save results to several .tsv files.
 '''

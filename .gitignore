@@ -1,2 +1,6 @@
 __pycache__/
-.vscode
+.vscode/
+.hypothesis/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
