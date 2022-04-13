@@ -13,13 +13,14 @@ from sklearn.svm import SVC
 from tests.conftest import dummy_classifier, assert_allclose
 import nestedcv as ncv
 import re
+from typing import Dict, Any
 
 
 def test_RGSCV(
     X: np.ndarray,
     y: np.ndarray,
-    RGSCV_results: dict,
-):
+    RGSCV_results: Dict[str, Any],
+) -> None:
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -27,7 +28,7 @@ def test_RGSCV(
         train_size=0.8,
         random_state=0,
         shuffle=True,
-        stratify=y
+        stratify=y,
     )
 
     gs = ncv.RepeatedGridSearchCV(
@@ -38,7 +39,7 @@ def test_RGSCV(
         n_jobs=None,
         Nexp=5,
         save_to=None,
-        reproducible=True
+        reproducible=True,
     )
     gs.fit(X_train, y_train)
     assert gs.opt_scores_ == {'mcc': 1.0}
@@ -50,8 +51,8 @@ def test_RGSCV(
 def test_RGSCV_parallel(
     X: np.ndarray,
     y: np.ndarray,
-    RGSCV_results: dict,
-):
+    RGSCV_results: Dict[str, Any],
+) -> None:
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -86,7 +87,7 @@ def test_RNCV_single(
     log_loss: float,
     score: float,
     threshold: float,
-):
+) -> None:
     estimator = dummy_classifier()
 
     param_grid = {'alpha': [0., .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]}
@@ -232,7 +233,7 @@ def test_RNCV_repeated(
     log_loss: float,
     score: float,
     threshold: float,
-):
+) -> None:
     estimator = dummy_classifier()
 
     param_grid = {'alpha': [0., .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]}
@@ -378,7 +379,7 @@ def test_RNCV_repeated_parallel(
     log_loss: float,
     score: float,
     threshold: float,
-):
+) -> None:
     estimator = dummy_classifier()
 
     param_grid = {'alpha': [0., .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]}
@@ -517,7 +518,7 @@ def test_RNCV_repeated_parallel(
                 raise ValueError("Unexpected key: %s" % key)
 
 
-def test_RNCV_precomputed_kernel():
+def test_RNCV_precomputed_kernel() -> None:
     # Test that grid search works when the input features are given in the
     # form of a precomputed kernel matrix
     X_, y_ = make_classification(n_samples=200, n_features=100, random_state=0)
@@ -548,7 +549,7 @@ def test_RNCV_precomputed_kernel():
     print(np.mean(y_pred == y_test))
 
 
-def test_grid_search_precomputed_kernel_error_nonsquare():
+def test_grid_search_precomputed_kernel_error_nonsquare() -> None:
     # Test that grid search returns an error with a non-square precomputed
     # training kernel matrix
     K_train = np.zeros((10, 20))

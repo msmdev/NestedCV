@@ -50,8 +50,8 @@ setup(
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
     description=(
-        'A project to perform repeated stratified nested cross-validated grid-search '
-        'for any estimator that implements the scikit-learn estimator interface'
+        'A project to perform repeated nested stratified cross-validation for '
+        'any estimator that implements the scikit-learn estimator interface'
     ),  # Optional
 
     # This is an optional longer description of your project that represents
@@ -102,14 +102,14 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 3 - Beta',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
 
         # Pick your license as you wish
-        # 'License :: OSI Approved :: MIT License',
+        'OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate you support Python 3. These classifiers are *not*

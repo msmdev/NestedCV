@@ -10,25 +10,40 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.metrics import make_scorer, matthews_corrcoef
 from pandas import DataFrame
+from typing import List, Union, Any
 
 
-def assert_allclose(actual, desired, rtol=1.0e-5, atol=1.0e-8, err_msg="", verbose=True):
+def assert_allclose(
+    actual: Union[np.ndarray, List[Union[float, int]]],
+    desired: Union[np.ndarray, List[Union[float, int]]],
+    rtol: float = 1.0e-5,
+    atol: float = 1.0e-8,
+    err_msg: str = '',
+    verbose: bool = True,
+) -> None:
     return assert_allclose_np(actual, desired, rtol=rtol, atol=atol, err_msg=err_msg, verbose=True)
 
 
 class dummy_classifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, alpha=1):
+    def __init__(
+        self,
+        alpha: float = 1
+    ) -> None:
         self.alpha = alpha
 
-    def fit(self, X, y):
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+    ) -> "dummy_classifier":
         """
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
+        X : np.ndarray, shape (n_samples, n_features)
             The training input samples.
             An array of float.
-        y : array-like, shape (n_samples)
+        y : np.ndarray, shape (n_samples)
             The target values. An array of int {0,1}.
         Returns
         -------
@@ -46,12 +61,15 @@ class dummy_classifier(ClassifierMixin, BaseEstimator):
 
         return self
 
-    def predict_proba(self, X):
+    def predict_proba(
+        self,
+        X: np.ndarray,
+    ) -> np.ndarray:
         """
         Predicts y from X using the previously fitted model.
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
+        X : np.ndarray, shape (n_samples, n_features)
             The input samples.
         Returns
         -------
@@ -91,16 +109,19 @@ class dummy_classifier(ClassifierMixin, BaseEstimator):
 
         return p
 
-    def predict(self, X):
+    def predict(
+        self,
+        X: np.ndarray,
+    ) -> np.ndarray:
         """
         Predicts y from X using the previously fitted model.
         Parameters
         ----------
-        X : array-like, shape (n_samples, n_features)
+        X : np.ndarray, shape (n_samples, n_features)
             The input samples.
         Returns
         -------
-        y : ndarray, shape (n_samples,)
+        y : np.darray, shape (n_samples,)
             The predicted classes.
         """
         # Check, if fit had been called
@@ -118,19 +139,24 @@ class dummy_classifier(ClassifierMixin, BaseEstimator):
 
         if not result.size == X.shape[0]:
             raise ValueError("Input and output must match in the first dimension, "
-                             f"but X.shape={X.shape} while y.shape={y.shape}.")
+                             f"but X.shape={X.shape} while y.shape={result.shape}.")
 
         return (result >= 0.5).astype(np.float64)
 
-    def score(self, X, y, metric='MCC'):
+    def score(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        metric: Union[str, Any] = 'MCC',
+    ) -> float:
         """
         Return the score version of the  Matthews correlation coefficient (higher is better)
         on the given test data and labels. Other metrics can be used.
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : np.ndarray of shape (n_samples, n_features)
             Test samples.
-        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+        y : np.ndarray of shape (n_samples,) or (n_samples, n_outputs)
             True labels for `X`.
         metric : optional. Metric function, if left empty the MCC score will be used.
         Returns
@@ -202,7 +228,7 @@ def RGSCV_results():
             {'alpha': 0.7},
             {'alpha': 0.8},
             {'alpha': 0.9},
-            {'alpha': 1.0}
+            {'alpha': 1.0},
         ],
         'alpha': np.ma.MaskedArray(
             data=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],

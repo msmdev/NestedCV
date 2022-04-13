@@ -7,7 +7,6 @@ from datetime import datetime
 import joblib
 from joblib import Parallel, delayed
 import json
-import math
 from matplotlib import pyplot as plt
 import numbers
 import numpy as np
@@ -17,39 +16,45 @@ import pathlib
 import pickle
 import re
 import sklearn
-from sklearn.base import BaseEstimator, clone, TransformerMixin
+from sklearn.base import clone, is_classifier
 from sklearn.metrics import auc, average_precision_score, brier_score_loss
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.metrics import f1_score, fbeta_score, log_loss, precision_score
 from sklearn.metrics import precision_recall_curve, recall_score, roc_auc_score, roc_curve
-from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, ParameterGrid
-from sklearn.utils import check_array, check_consistent_length, check_X_y
+from sklearn.model_selection import StratifiedKFold, ParameterGrid
+from sklearn.utils import check_array, check_consistent_length, check_X_y, indexable
 from sklearn.metrics._classification import _check_targets
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.metaestimators import _safe_split
 from sklearn.utils.multiclass import type_of_target
 import sklearn.pipeline
-from sklearn.model_selection._split import _BaseKFold
+from sklearn.model_selection._split import BaseCrossValidator, check_cv
 import warnings
 from typing import Dict, List, Tuple, Union, Optional, ClassVar, Any
 
 __all__ = [
-    'generate_timestamp',
-    'save_model',
-    'save_json',
     'filename_generator',
+    'generate_timestamp',
     'load_model',
+    'load_json',
+    'RepeatedGridSearchCV',
     'RepeatedStratifiedNestedCV',
-    'RepeatedGridSearchCV'
+    'save_dataframe_to_excel',
+    'save_dataframes_to_excel',
+    'save_json',
+    'save_model',
 ]
 
 
-def generate_timestamp():
+def generate_timestamp() -> str:
     dt_string = datetime.now().strftime("%d.%m.%Y_%H-%M-%S")
     return dt_string
 
 
-def load_model(filename, method="pickle"):
+def load_model(
+    filename: str,
+    method: str = "pickle",
+) -> Any:
     if method == "joblib":
         model_loaded = joblib.load(filename)
         return model_loaded
@@ -61,7 +66,10 @@ def load_model(filename, method="pickle"):
         print("There is no such method as", method)
 
 
-def load_json(path, file):
+def load_json(
+    path: str,
+    file: str,
+) -> Dict[str, Any]:
     file = os.path.join(path, file)
     # Opening JSON file
     with open(file) as json_file:
@@ -73,7 +81,7 @@ def filename_generator(
     filename: str,
     extension: str,
     directory: Optional[str] = None,
-    timestamp: bool = True,
+    timestamp: Union[bool, str] = True,
 ) -> str:
     """Generate a filename (including the absolute path to a given directory,
     if requested) that is ready to use.
@@ -119,10 +127,10 @@ def filename_generator(
 
 
 def save_model(
-    my_model,
+    my_model: Any,
     directory: str,
     filename: str,
-    timestamp: bool = True,
+    timestamp: Union[bool, str] = True,
     compress: bool = False,
     method: str = 'joblib',
 ) -> None:
@@ -165,7 +173,7 @@ def save_json(
     dictionary: Dict[Any, Any],
     directory: str,
     filename: str,
-    timestamp: bool = True,
+    timestamp: Union[bool, str] = True,
 ) -> None:
     fn = filename_generator(filename, extension=".json", directory=directory,
                             timestamp=timestamp)
@@ -180,7 +188,7 @@ def save_dataframe_to_excel(
     dataframe: pd.DataFrame,
     directory: str,
     filename: str,
-    timestamp: bool = True
+    timestamp: Union[bool, str] = True
 ) -> None:
     fn = filename_generator(filename, extension=".xlsx", directory=directory,
                             timestamp=timestamp)
@@ -195,7 +203,7 @@ def save_dataframes_to_excel(
     directory: str,
     filename: str,
     sheetid: str,
-    timestamp: bool = True
+    timestamp: Union[bool, str] = True
 ) -> None:
     '''Save several pandas dataframes as several sheets in one excel workbook.
 
@@ -416,204 +424,6 @@ def markedness(
     return ppv + npv - 1
 
 
-class BinaryEncoderPandas(BaseEstimator, TransformerMixin):
-
-    def __init__(self, zero_category="wt"):
-        self.zero_category = zero_category
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        """BinaryEncoder transforms a given Pandas DataFrame with categorical data
-        such that all (categorical) attribute values are transformed to binary values:
-        values equals zero_category (hyperparameter to be set) are set to zero,
-        while all other values are set to 1. Returns a transformed copy of the input"""
-        X_bin = X.copy()
-        if isinstance(X_bin, pd.DataFrame) or isinstance(X_bin, pd.Series):
-            X_bin = X_bin.mask(X_bin != self.zero_category, 1.0)
-            X_bin = X_bin.mask(X_bin == self.zero_category, 0.0)
-            return X_bin.astype(dtype=np.float64)
-        else:
-            print("Input is neither a pandas DataFrame nor a pandas Series!")
-
-
-class BinaryEncoderPandasNaN(BaseEstimator, TransformerMixin):
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        """BinaryEncoder transforms a given Pandas DataFrame with categorical data
-        such that all (categorical) attribute values are transformed to binary values:
-        values equals np.nan are set to zero,
-        while all other values are set to 1. Returns a transformed copy of the input"""
-        X_bin = X.copy()
-        if isinstance(X_bin, pd.DataFrame) or isinstance(X_bin, pd.Series):
-            X_bin = X_bin.mask(~X_bin.isna(), 1.0)
-            X_bin = X_bin.mask(X_bin.isna(), 0.0)
-            return X_bin.astype(dtype=np.float64)
-        else:
-            print("Input is neither a pandas DataFrame nor a pandas Series!")
-
-
-class BinaryEncoder(BaseEstimator, TransformerMixin):
-
-    def __init__(self, zero_category="wt"):
-        self.zero_category = zero_category
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        """BinaryEncoder transforms a given array with categorical data
-        such that all (categorical) attribute values are transformed to binary values:
-        values equals zero_category (hyperparameter to be set) are set to zero,
-        while all other values are set to 1. Returns a transformed copy of the input"""
-        X_bin = X.copy()
-        if X_bin.ndim == 1:
-            n = X.size
-            for i in range(0, n):
-                if X[i] == self.zero_category:
-                    X_bin[i] = 0.0
-                else:
-                    X_bin[i] = 1.0
-            return X_bin
-        elif X_bin.ndim == 2:
-            rows, cols = X.shape
-            for i in range(0, rows):
-                for j in range(0, cols):
-                    if X[i, j] == self.zero_category:
-                        X_bin[i, j] = 0.0
-                    else:
-                        X_bin[i, j] = 1.0
-            return X_bin
-        else:
-            print("Input neither 1- nor 2-dimensional!")
-
-
-class dropRare(BaseEstimator, TransformerMixin):
-
-    def __init__(self, drop_occurrences=1.0):
-        self.drop_occurrences = drop_occurrences
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        """dropRare transforms a given numpy ndarray with binary numeric data
-        (presence/absence encoding: `x_ij = 1.0` if variant `j` is present in sample `i`,
-        `x_ij = 0.0` otherwise; format: n_samples x n_features) such that all
-        columns (features) with `drop_occurrences` occurrences or less are droped.
-        Returns a transformed copy of the input"""
-        if isinstance(X, np.ndarray):
-            Xc = X.copy()
-            Nsam, Ncol = Xc.shape
-            keep = np.ones(Ncol, dtype=bool)
-            # beware: don't drop the last columns, since this feature is not a variant,
-            # but the rule-based genotype!
-            for i in range(0, Ncol - 1):
-                keep[i] = (np.sum(Xc[:, i]) > self.drop_occurrences)
-            Xc = Xc[:, keep]
-            # some sanity checks:
-            nsam, ncol = Xc.shape
-            if nsam != Nsam:
-                raise ValueError("The number of samples (rows) changed during dropping "
-                                 "of rare variants (columns).")
-            often = np.sum(np.sum(X[:, :-1], axis=0) > self.drop_occurrences)
-            rare = np.sum(np.sum(X[:, :-1], axis=0) <= self.drop_occurrences)
-            if often + rare != Ncol - 1:
-                raise ValueError("Something is wrong: The number of rare variants %d "
-                                 "and the number of frequent variants %d don't sum up "
-                                 "to the total number of variants (number of columns "
-                                 "minus one, since the last column isn't a variant but "
-                                 "the genotype) %d." % (rare, often, Ncol-1))
-            if ncol - 1 != often:
-                raise ValueError("%d variants (columns minus one, since the last column "
-                                 "isn't a variant but the genotype) were kept, but it "
-                                 "should be %d." % (ncol-1, often))
-            if ncol + rare != Ncol:
-                raise ValueError("The kept columns and the rare variants don't sum "
-                                 "up to the original number of columns.")
-            return Xc
-
-
-class dropRarePandas(BaseEstimator, TransformerMixin):
-
-    def __init__(self, drop_occurrences=1.0):
-        self.drop_occurrences = drop_occurrences
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X, y=None):
-        """dropRare transforms a given Pandas dataframe with binary numeric data
-        (presence/absence encoding: `x_ij = 1.0` if variant `j` is present in sample `i`,
-        `x_ij = 0.0` otherwise; format: n_samples x n_features) such that all
-        columns (features) with `drop_occurrences` occurrences or less are droped.
-        Returns a transformed copy of the input"""
-        if isinstance(X, pd.DataFrame) or isinstance(X, pd.Series):
-            Xc = X.copy()
-            Nsam, Ncol = Xc.shape
-            keep = np.ones(Ncol, dtype=bool)
-            # beware: don't drop the last column, since this feature is not a variant,
-            # but the rule-based genotype!
-            for i in range(0, Ncol - 1):
-                # keep[i] = (Xc.iloc[:,i].sum() > self.drop_occurrences)
-                keep[i] = (np.sum(Xc.iloc[:, i].to_numpy(dtype=np.float64)) >
-                           self.drop_occurrences)
-            Xc = Xc.loc[:, keep]
-            # some sanity checks:
-            nsam, ncol = Xc.shape
-            if nsam != Nsam:
-                raise ValueError("The number of samples (rows) changed during dropping "
-                                 "of rare variants (columns).")
-            often = np.sum(
-                np.sum(X.iloc[:, :-1].to_numpy(dtype=np.float64), axis=0) > self.drop_occurrences
-            )
-            rare = np.sum(
-                np.sum(X.iloc[:, :-1].to_numpy(dtype=np.float64), axis=0) <= self.drop_occurrences
-            )
-            if often + rare != Ncol - 1:
-                raise ValueError("Something is wrong: The number of rare variants %d "
-                                 "and the number of frequent variants %d don't sum up "
-                                 "to the total number of variants (number of columns "
-                                 "minus one, since the last column isn't a variant but "
-                                 "the genotype) %d." % (rare, often, Ncol-1))
-            if ncol - 1 != often:
-                raise ValueError("%d variants (columns minus one, since the last column "
-                                 "isn't a variant but the genotype) were kept, but it "
-                                 "should be %d." % (ncol-1, often))
-            if ncol + rare != Ncol:
-                raise ValueError("The kept columns and the rare variants don't sum "
-                                 "up to the original number of columns.")
-            return Xc
-
-
-class DataFrameSelector(BaseEstimator, TransformerMixin):
-    # Taken from p.68 of A. Gerón (2017): Hands-On Machine Learning
-    # with Scikit-Learn & Tensorflow.
-
-    def __init__(self, attribute_names):
-        self.attribute_names = attribute_names
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        return X[self.attribute_names].to_numpy(copy=True)
-
-
-def split_train_test(data, labels=None, test_size=0.2, random_state=42):
-    split = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
-    for train_index, test_index in split.split(data, labels):
-        data_train = data.loc[train_index]
-        data_test = data.loc[test_index]
-        labels_train = labels.loc[train_index]
-        labels_test = labels.loc[test_index]
-    return (data_train, data_test, labels_train, labels_test)
-
-
 def plot_roc_curve(
     fpr: Union[float, List[float], np.ndarray],
     tpr: Union[float, List[float], np.ndarray],
@@ -623,8 +433,8 @@ def plot_roc_curve(
     label: Optional[str] = None,
     directory: Optional[str] = None,
     filename: Optional[str] = None,
-    timestamp: bool = True,
-    fmt: str = 'pdf'
+    timestamp: Union[bool, str] = True,
+    fmt: str = 'pdf',
 ) -> None:
     """
     The ROC curve, modified from
@@ -663,8 +473,8 @@ def plot_precision_recall_curve(
     label: Optional[str] = None,
     directory: Optional[str] = None,
     filename: Optional[str] = None,
-    timestamp: bool = True,
-    fmt: str = 'pdf'
+    timestamp: Union[bool, str] = True,
+    fmt: str = 'pdf',
 ) -> None:
     plt.figure(figsize=(8, 8))
     plt.title("Precision-Recall-Curve")
@@ -701,8 +511,8 @@ def plot_precision_recall_vs_threshold(
     recall_marker_label: Optional[str] = None,
     directory: Optional[str] = None,
     filename: Optional[str] = None,
-    timestamp: bool = True,
-    fmt: str = 'pdf'
+    timestamp: Union[bool, str] = True,
+    fmt: str = 'pdf',
 ) -> None:
     """
     Modified from:
@@ -746,8 +556,8 @@ def plot_specificity_recall_vs_threshold(
     recall_marker_label: Optional[str] = None,
     directory: Optional[str] = None,
     filename: Optional[str] = None,
-    timestamp: bool = True,
-    fmt: str = 'pdf'
+    timestamp: Union[bool, str] = True,
+    fmt: str = 'pdf',
 ) -> None:
     plt.figure(figsize=(8, 8))
     plt.title("Specificity and Sensitivity over Decision Threshold")
@@ -788,181 +598,6 @@ def adjusted_classes(
     return np.array([1.0 if y >= t else 0.0 for y in y_scores])
 
 
-def process_simple_data(drug, mutations, genotype, phenotype):
-    """Simple preprocessing "pipeline" for mutation, genotype and phenotype data """
-
-    mutations_raw = mutations.copy(deep=True)
-    geno = genotype.copy(deep=True)
-    pheno = phenotype.copy(deep=True)
-
-    mutations_bin = BinaryEncoderPandas(zero_category="wt").transform(mutations_raw)
-    # print("binary mutations:", mutations_bin.head())
-    selector = np.all([pheno[drug].isin(["R", "S"]),
-                       geno[drug].isin(["R", "S"])], axis=0)
-    # print("selector:", selector)
-    predictor = geno[drug].loc[selector]
-    # print("predictor:", predictor)
-    predictor = BinaryEncoderPandas(zero_category="S").transform(predictor)
-    # print("binary predictor:", predictor)
-    mutations = mutations_bin.loc[selector, :]
-    # print("selected binary mutations:", mutations)
-    mutations = pd.concat([mutations, predictor], axis=1)
-    # print("mutations with predictor:", mutations)
-    response = pheno[drug].loc[selector]
-    # print("response:", response)
-    response = BinaryEncoderPandas(zero_category="S").transform(response)
-    # print("binary response:", response)
-    Nout, Ncol = mutations.shape
-    keep = np.ones(Ncol, dtype=bool)
-    for i in range(0, Ncol):
-        keep[i] = (mutations.iloc[:, i].unique().size > 1)
-    # print("keep:", keep)
-    mutations = mutations.loc[:, keep]
-    # print("kept mutations", mutations)
-    X = mutations.to_numpy(dtype=np.float64)
-    # print("X:", X)
-    y = response.to_numpy(dtype=np.float64)
-    # print("y:", y)
-    return X, y
-
-
-def _tackle_imbalance(mutations, response, drug, target_pos_frac=0.3,
-                      target_neg_frac=0.7, random_state=42):
-    # def helper(pos_frac, neg_frac):
-    #     target_pos_frac = (pos_frac + 0.5) / 2.0
-    #     target_neg_frac = (neg_frac + 0.5) / 2.0
-    #     return target_pos_frac, target_neg_frac
-    n_p = response.sum(axis=0)
-    if math.ceil(n_p) != math.floor(n_p):
-        raise ValueError('Number of positives n_p is not integer.')
-    n_p = int(n_p)
-    # print('n_p:', n_p)
-    n_all = response.size
-    # print('n_all:', n_all)
-    pos_frac = np.true_divide(n_p, n_all)
-    # neg_frac = 1.0 - pos_frac
-
-    column = drug + '_pheno'
-    response_df = pd.DataFrame(data=response.to_numpy(dtype=np.float64),
-                               index=response.index, columns=[column])
-    combi = pd.concat([mutations, response_df], axis=1, sort=False)
-    # print('combi:', combi)
-
-    if pos_frac < 0.3:
-        # indicate to calling routine that condition was met
-        indicator = True
-        # target_pos_frac, target_neg_frac = helper(pos_frac, neg_frac)
-        pos_selector = response.isin([1.0])
-        # print('pos_selector:', pos_selector)
-        combi_pos = combi.loc[pos_selector, :]
-        # print('combi_pos:', combi_pos)
-        if combi_pos.loc[:, column].sum(axis=0) != n_p:
-            raise ValueError("The number of positives m_p doesn't match the number of "
-                             "positives in the positives selection.")
-        if combi_pos.shape[0] != n_p:
-            raise ValueError("Not all samples in the positives selection are positive.")
-        combi_neg = combi.loc[~pos_selector, :]
-        if combi_neg.loc[:, column].sum(axis=0) != 0.0:
-            raise ValueError("Not all samples in the negatives selection are negative.")
-        # print('combi_neg:', combi_neg)
-        n_res = int(n_p / target_pos_frac)
-        # print('n_res:', n_res)
-        n_n = n_res - n_p
-        # print('n_n:', n_n)
-        if random_state:
-            combi_neg_res = combi_neg.sample(n=n_n, replace=False, random_state=random_state)
-        else:
-            combi_neg_res = combi_neg.sample(n=n_n, replace=False)
-        # print('combi_neg_res:', combi_neg_res)
-        if combi_neg_res.shape[0] != n_n:
-            raise ValueError("The number of samples in the restricted selection "
-                             "of negatives is not equal n_n.")
-        combi_res = combi_pos.append(combi_neg_res, sort=False)
-        # print('combi_res:', combi_res)
-        if combi_res.shape[0] != n_res:
-            raise ValueError("The number of samples in the restricted selection "
-                             "of samples is not equal n_res.")
-        if combi_res.shape[1] != mutations.shape[1] + 1:
-            raise ValueError("The number of features in the restricted selection "
-                             "of samples is not equal to the original number of "
-                             "features plus 1.")
-        combi_res.sort_index(axis=0, inplace=True, kind='mergesort')
-        mutations_res = combi_res.drop(columns=column, inplace=False)
-        # print('mutations_res:', mutations_res)
-        if mutations_res.shape[0] != n_res:
-            raise ValueError("The number of samples in the restricted selection "
-                             "of sample mutations is not equal n_res.")
-        if mutations_res.shape[1] != mutations.shape[1]:
-            raise ValueError("The number of mutations in the restricted selection "
-                             "of sample mutations is not equal to the original "
-                             "number of mutations.")
-        response_res = combi_res.loc[:, column]
-        if response_res.size != n_res:
-            raise ValueError("The number of samples in the restricted selection "
-                             "of responses is not equal n_res.")
-        return mutations_res, response_res, indicator
-    else:
-        indicator = False
-        return mutations, response, indicator
-
-
-def process_variant_collection_data(
-        drug, mutations, genotype, phenotype, geno_drug=False, drop_rare=False,
-        drop_occurrences=1, target_pos_frac=0.3, target_neg_frac=0.7, random_state=42
-):
-    """Simple preprocessing "pipeline" for variant-wise mutation, genotype and
-    phenotype data. BEWARE: The returned mutations are actually the mutations of
-    te selected samples plus the associated genotype!
-    """
-    if geno_drug is False:
-        geno_drug = drug
-
-    geno = genotype.copy(deep=True)
-    pheno = phenotype.copy(deep=True)
-
-    selector = np.all([pheno[drug].isin(["R", "S"]),
-                       geno[geno_drug].isin(["R", "S"])], axis=0)
-    # print("selector:", selector)
-    mutations_sel = mutations.loc[selector, :]
-    # mutations_sel = mutations_sel.sparse.to_dense()
-    mutations_bin = BinaryEncoderPandasNaN().transform(mutations_sel)
-    del mutations_sel
-    predictor = geno[geno_drug].loc[selector]
-    # print("predictor:", predictor)
-    predictor = BinaryEncoderPandas(zero_category="S").transform(predictor)
-    # print("binary predictor:", predictor)
-    # mutations_bin = mutations_bin.loc[selector,:]
-    # print("selected binary mutations:", mutations_bin)
-    mutations_bin = pd.concat([mutations_bin, predictor], axis=1)
-    # print("mutations with predictor:", mutations_bin)
-    response = pheno[drug].loc[selector]
-    # print("response:", response)
-    response = BinaryEncoderPandas(zero_category="S").transform(response)
-    # print("binary response:", response)
-    # tackle imbalance, if necessary
-    mutations_bin, response, indicator = _tackle_imbalance(
-        mutations_bin, response, drug, target_pos_frac, target_neg_frac, random_state
-    )
-    Nout, Ncol = mutations_bin.shape
-    keep = np.ones(Ncol, dtype=bool)
-    # drop columns with only one unique value, since they are uninformative
-    for i in range(0, Ncol - 1):
-        keep[i] = (mutations_bin.iloc[:, i].nunique() > 1)
-    # print("keep:", keep)
-    mutations_bin = mutations_bin.loc[:, keep]
-    # print("kept mutations with predictor", mutations_bin)
-    # drop columns belonging to rre variants, if requested
-    if drop_rare:
-        mutations_bin = dropRarePandas(drop_occurrences).transform(mutations_bin)
-
-    X = mutations_bin.to_numpy(dtype=np.float64)
-    # print("X:", X)
-    y = response.to_numpy(dtype=np.float64)
-    # print("y:", y)
-
-    return X, y, mutations_bin, response, indicator
-
-
 class RepeatedGridSearchCV:
     """A general class to handle nested cross-validated grid-search for any
     estimator that implements the scikit-learn estimator interface.
@@ -995,11 +630,11 @@ class RepeatedGridSearchCV:
 
     cv : int or cross-validatior (a.k.a. CV splitter),
     default=StratifiedKFold(n_splits=5, shuffle=True)
-        Determines the cross-validation splitting strategy.
+        Determines the inner cross-validation splitting strategy.
         Possible inputs for ``cv`` are:
-        - ``None``, to use the default 5-fold stratified cross validation,
-        - int, to specify the number of folds in a ``StratifiedKFold``,
-        - CV splitter.
+        - integer, to specify the number of folds in a ``StratifiedKFold``,
+        - CV splitter,
+        - a list of CV splitters of length Nexp.
 
     n_jobs : int or None, default=None
         Number of jobs of GridSearchCV to run in parallel.
@@ -1047,7 +682,7 @@ class RepeatedGridSearchCV:
         Methods
         -------
 
-        fit(self, X, y)
+        fit(self, X, y[, groups])
             Run fit.
     """
     metrics_proba: ClassVar[List[str]] = [
@@ -1076,7 +711,7 @@ class RepeatedGridSearchCV:
             param_grid: Union[Dict[str, List[Any]], List[Dict[str, List[Any]]]],
             *,
             scoring: str = 'precision_recall_auc',
-            cv: _BaseKFold = StratifiedKFold(n_splits=5, shuffle=True),
+            cv: BaseCrossValidator = StratifiedKFold(n_splits=5, shuffle=True),
             n_jobs: Optional[int] = None,
             Nexp: int = 10,
             save_to: Optional[Dict[str, str]] = None,
@@ -1096,12 +731,26 @@ class RepeatedGridSearchCV:
                 raise ValueError("All elements of 'scoring' must be unique.")
         if isinstance(cv, numbers.Number):
             self.cv = StratifiedKFold(n_splits=cv, shuffle=True)
-        elif issubclass(type(cv), _BaseKFold):
+        elif issubclass(type(cv), BaseCrossValidator):
+            self.cv = cv
+        elif isinstance(cv, list):
+            if not len(cv) == Nexp:
+                raise ValueError(
+                    "If supplying a list of CV splitters for 'cv', its length must "
+                    "match the number of CV repetitions."
+                )
+            for cv_ in cv:
+                if not issubclass(type(cv_), BaseCrossValidator):
+                    raise ValueError(
+                        "The value of the 'cv' key must be either an integer, "
+                        "to specify the number of folds, a CV splitter, or a list of "
+                        "CV splitters of length Nexp."
+                    )
             self.cv = cv
         else:
-            raise ValueError(
-                "'cv' must be either an integer, to specify the number of folds, or a CV splitter."
-            )
+            raise ValueError("The value of the 'cv' key must be either an integer, "
+                             "to specify the number of folds, a CV splitter, or a list of "
+                             "CV splitters of length Nexp.")
         self.n_jobs = n_jobs
         self.Nexp = Nexp
         self.save_to = save_to
@@ -1111,6 +760,7 @@ class RepeatedGridSearchCV:
         self,
         X: np.ndarray,
         y: np.ndarray,
+        groups: Optional[np.ndarray] = None,
     ) -> None:
 
         # Generate a timestamp used for file naming
@@ -1118,6 +768,11 @@ class RepeatedGridSearchCV:
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
+
+        X, y, groups = indexable(X, y, groups)
+
+        # mb use sklearn's check_cv in the future:
+        # cv = check_cv(cv, y, classifier=is_classifier(self.estimator))
 
         X, y = check_X_y(X, y, estimator='RepeatedGridSearchCV')
 
@@ -1191,10 +846,28 @@ class RepeatedGridSearchCV:
         # 1. Repeat the following process Nexp times
         for nexp in range(self.Nexp):
 
+            if isinstance(self.cv, list):
+                cv = self.cv[nexp]
+                if self.reproducible:
+                    raise ValueError(
+                        "Supplying a list of CV splitters for 'cv' "
+                        "has no effect when setting reproducible=True."
+                    )
+            else:
+                cv = self.cv
+
+            # TODO: check, if is_classifier really recognizes RBC
+            cv = check_cv(cv, y, classifier=is_classifier(self.estimator))
+
             # CAUTION: THIS IS A HACK TO MAKE THE RESULTS REPRODUCIBLE!!!
             if self.reproducible:
-                n_splits = self.cv.get_n_splits()
-                self.cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=nexp)
+                if groups is not None:
+                    raise ValueError(
+                        "Supplying group lables for grouped CV splitting has "
+                        "no effect when setting reproducible=True."
+                    )
+                n_splits = cv.get_n_splits()
+                cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=nexp)
 
             # a. Divide the dataset X (labelset y) pseudo-randomly into V folds
             # b. For I from 1 to V
@@ -1203,7 +876,7 @@ class RepeatedGridSearchCV:
             y_probas_list = []
             y_tests_list = []
 
-            for (j, (train, test)) in enumerate(self.cv.split(X, y)):
+            for (j, (train, test)) in enumerate(cv.split(X, y, groups)):
                 # i. Define set X_train (y_train) as the dataset (labelset) without the I-th fold
                 # ii. Define set X_test (y_test) as the I-th fold of the dataset X (labelset y)
                 if isinstance(self.estimator, sklearn.pipeline.Pipeline):
@@ -1480,8 +1153,9 @@ class RepeatedStratifiedNestedCV:
         default=StratifiedKFold(n_splits=5, shuffle=True)
             Determines the inner cross-validation splitting strategy.
             Possible inputs for ``'inner_cv'`` are:
-            - int, to specify the number of folds in a ``StratifiedKFold``,
-            - CV splitter.
+            - integer, to specify the number of folds in a ``StratifiedKFold``,
+            - CV splitter,
+            - a list of CV splitters of length Nexp1.
 
         'n_jobs' : int or None, default=None
             Number of jobs of ``RepeatedGridSearchCV`` to run in parallel.
@@ -1498,7 +1172,8 @@ class RepeatedStratifiedNestedCV:
             Determines the outer cross-validation splitting strategy.
             Possible inputs for ``'outer_cv'`` are:
             - integer, to specify the number of folds in a ``StratifiedKFold``,
-            - CV splitter.
+            - CV splitter,
+            - a list of CV splitters of length Nexp2.
 
         'refit' : bool or str, default=False
             Refit an estimator using the best found parameters (rank 1) on the whole dataset.
@@ -1530,7 +1205,7 @@ class RepeatedStratifiedNestedCV:
 
         'save_inner_to' : dict or None, default=None
             If not ``None``, the train and test indices for every inner split
-            and y_proba and y_test for every point of the parameter
+            and ``y_proba`` and ``y_test`` for every point of the parameter
             grid of the inner cross-validated grid search will be saved.
             Pass a dict ``{'directory': str, 'ID': str}`` with two keys
             denoting the location and name of output files. The value of the
@@ -1584,7 +1259,7 @@ class RepeatedStratifiedNestedCV:
               if ``cv_options['threshold_tuning_scoring']`` is set to ``'f1'`` or ``'f2'`` or
             - fpr and tpr over varying threshold,
               if ``cv_options['threshold_tuning_scoring']`` is set to ``'balanced_accuracy'``,
-              ``'J'``, ``'pseudo_f1'`` or ``'pseudo_f2'``),
+              ``'J'``, ``'pseudo_f1'``, or ``'pseudo_f2'``,
             is saved in a .json file.
             Pass a dict ``{'directory': str, 'ID': str}`` with two keys
             denoting the location and identifier of output files. The value of the
@@ -1613,7 +1288,7 @@ class RepeatedStratifiedNestedCV:
             (formated like this: 26.03.2020_17-52-20)
             will be appended before the file extension (.pdf).
 
-        'scoring' : string or list, default='precision_recall_auc'
+        'scoring' : str or list, default='precision_recall_auc'
             Can be a string or a list with elements out of ``'balanced_accuracy'``,
             ``'brier_loss'``, ``'f1'``, ``'f2'``, ``'log_loss'``, ``'mcc'``, ``'pseudo_f1'``,
             ``'pseudo_f2'``, ``'sensitivity'``, ``'average_precision'``,
@@ -1626,7 +1301,7 @@ class RepeatedStratifiedNestedCV:
             ``'precision_recall_auc'`` or ``'roc_auc'`` the estimator must support the
             ``predict_proba`` method for predicting binary class probabilities in [0,1].
 
-        'threshold_tuning_scoring' : string or list, default='f2'
+        'threshold_tuning_scoring' : str or list, default='f2'
             Only used, if ``cv_options['tune_threshold']=True``.
             If a single metric is chosen as scoring (e.g. ``cv_options['scoring']='mcc'``),
             it can be one out of ``'balanced_accurracy'``, ``'f1'``, ``'f2'``,
@@ -1660,7 +1335,7 @@ class RepeatedStratifiedNestedCV:
             Choosing ``cv_options['scoring']='precision_recall_auc'``, it would be sensible
             to set ``cv_options['threshold_tuning_scoring']`` to either ``'f1'`` or ``'f2'``.
 
-        'tune_threshold' : boolean, default=True
+        'tune_threshold' : bool, default=True
             If ``True``, perform threshold tuning on each outer training fold
             for the estimator with the best hyperparameters (found by tuning of these
             in the inner cross validation) retrained on the outer training fold.
@@ -1685,14 +1360,14 @@ class RepeatedStratifiedNestedCV:
 
         ranked_best_inner_params_
             Ranked (most frequent first) best inner params as a list of
-            dictionaries (every dict, i.e. parameter combination,
+            dicts (every dict, i.e. parameter combination,
             occurs only once).
 
         best_inner_params_
-            Best inner params for each outer loop as a list of dictionaries.
+            Best inner params for each outer loop as a list of dicts.
 
         best_thresholds_
-            If cv_option['tune_threshold']=True, this is a dict containing the best thresholds
+            If ``cv_option['tune_threshold']=True``, this is a dict containing the best thresholds
             and threshold-tuning-scorings for each scoring-threshold_tuning_scoring-pair.
             Given as a dict with scorings as keys and dicts as values. Each of these dicts
             given as ``{'best_<threshold_tuning_scoring>': list, 'best_theshold': list}``
@@ -1733,8 +1408,8 @@ class RepeatedStratifiedNestedCV:
         Methods
         -------
 
-        fit(self, X, y[, baseline_prediction])
-            Method to run repeated stratified nested cross-validated grid-search.
+        fit(self, X, y[, baseline_prediction, groups])
+            A method to run repeated nested stratified cross-validated grid-search.
 
         predict(self, X)
             Call predict on the estimator with the best found parameters.
@@ -1863,22 +1538,52 @@ class RepeatedStratifiedNestedCV:
         inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(inner_cv, numbers.Number):
             self.inner_cv = StratifiedKFold(n_splits=inner_cv, shuffle=True)
-        elif issubclass(type(inner_cv), _BaseKFold):
+        elif issubclass(type(inner_cv), BaseCrossValidator):
+            self.inner_cv = inner_cv
+        elif isinstance(inner_cv, list):
+            if not len(inner_cv) == self.Nexp1:
+                raise ValueError(
+                    "If supplying a list of CV splitters for the inner CV, its length must "
+                    "match the number of inner CV repetitions."
+                )
+            for cv in inner_cv:
+                if not issubclass(type(cv), BaseCrossValidator):
+                    raise ValueError(
+                        "The value of the 'inner_cv' key must be either an integer, "
+                        "to specify the number of folds, a CV splitter, or a list of "
+                        "CV splitters of length Nexp1."
+                    )
             self.inner_cv = inner_cv
         else:
             raise ValueError("The value of the 'inner_cv' key must be either an integer, "
-                             "to specify the number of folds, or a CV splitter.")
+                             "to specify the number of folds, a CV splitter, or a list of "
+                             "CV splitters of length Nexp1.")
         self.n_jobs = cv_options.get('n_jobs', None)
         self.Nexp1 = cv_options.get('Nexp1', 10)
         self.Nexp2 = cv_options.get('Nexp2', 10)
         outer_cv = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(outer_cv, numbers.Number):
             self.outer_cv = StratifiedKFold(n_splits=outer_cv, shuffle=True)
-        elif issubclass(type(outer_cv), _BaseKFold):
+        elif issubclass(type(outer_cv), BaseCrossValidator):
+            self.outer_cv = outer_cv
+        elif isinstance(outer_cv, list):
+            if not len(outer_cv) == self.Nexp2:
+                raise ValueError(
+                    "If supplying a list of CV splitters for the outer CV, its length must "
+                    "match the number of nested CV repetitions."
+                )
+            for cv in outer_cv:
+                if not issubclass(type(cv), BaseCrossValidator):
+                    raise ValueError(
+                        "The value of the 'outer_cv' key must be either an integer, "
+                        "to specify the number of folds, a CV splitter, or a list of "
+                        "CV splitters of length Nexp2."
+                    )
             self.outer_cv = outer_cv
         else:
             raise ValueError("The value of the 'outer_cv' key must be either an integer, "
-                             "to specify the number of folds, or a CV splitter.")
+                             "to specify the number of folds, a CV splitter, or a list of "
+                             "CV splitters of length Nexp2.")
         self.refit = cv_options.get('refit', False)
         if not isinstance(self.refit, bool) and not isinstance(self.refit, str):
             raise ValueError("The value of the 'refit' key must bei either boolean or str.")
@@ -1985,7 +1690,7 @@ class RepeatedStratifiedNestedCV:
         y_train: np.ndarray,
         ID: Optional[str],
         score: str = 'f2',
-        timestamp: bool = True,
+        timestamp: Union[bool, str] = True,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
         # predict train probabilities (for refited best model)
         y_proba_train = self.estimator.predict_proba(X_train)[:, 1]
@@ -2033,7 +1738,7 @@ class RepeatedStratifiedNestedCV:
         y_train: np.ndarray,
         ID: Optional[str],
         score: str = 'J',
-        timestamp: bool = True,
+        timestamp: Union[bool, str] = True,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
         # predict train probabilities (for refited best model)
         y_proba_train = self.estimator.predict_proba(X_train)[:, 1]
@@ -2292,22 +1997,27 @@ class RepeatedStratifiedNestedCV:
         self,
         X: np.ndarray,
         y: np.ndarray,
-        baseline_prediction: Optional[np.ndarray] = None
+        baseline_prediction: Optional[np.ndarray] = None,
+        groups: Optional[np.ndarray] = None,
     ) -> None:
-        """A method to run repeated stratified nested cross-validated grid-search.
+        """A method to run repeated nested stratified cross-validated grid-search.
 
         Parameters
         ----------
-        X : array-like of shape (n_samples, n_features)
+        X : numpy.ndarray of shape (n_samples, n_features)
             Training vector, where n_samples is the number of samples and
             n_features is the number of features.
 
-        y : array-like of shape (n_samples, n_output) or (n_samples,)
+        y : numpy.ndarray of shape (n_samples, n_output) or (n_samples,)
             Target relative to X for classification.
 
-        baseline_prediction : None or array-like of shape (n_samples,), default=None
+        baseline_prediction : None or numpy.ndarray of shape (n_samples,), default=None
             Given baseline prediction of the target.
             Used to calculate the baseline performance scores.
+
+        groups : numpy.ndarray of shape (n_samples,), default=None
+            Group labels for the samples used while splitting the dataset into train/test set.
+            Only used in conjunction with a “Group” cv instance (e.g., GroupKFold).
 
         Returns
         -------
@@ -2378,6 +2088,8 @@ class RepeatedStratifiedNestedCV:
 
         if isinstance(X, pd.DataFrame):
             X = X.to_numpy()
+
+        X, y, groups = indexable(X, y, groups)
 
         X, y = check_X_y(X, y, estimator='RepeatedStratifiedNestedCV')
 
@@ -2518,31 +2230,38 @@ class RepeatedStratifiedNestedCV:
         repeated_cv_results_lists = []
         repeated_cv_results_as_dataframes_list = []
 
-        gs = RepeatedGridSearchCV(
-            estimator=self.estimator,
-            param_grid=self.param_grid,
-            scoring=self.scoring,
-            cv=self.inner_cv,
-            n_jobs=self.n_jobs,
-            Nexp=self.Nexp1,
-            save_to=self.save_inner_to,
-            reproducible=self.reproducible
-        )
-
         # Repeated Nested CV with parameter optimization.
         for nexp2 in range(self.Nexp2):
 
+            if isinstance(self.outer_cv, list):
+                outer_cv = self.outer_cv[nexp2]
+                if self.reproducible:
+                    raise ValueError(
+                        "Supplying a list of CV splitters for the outer CV "
+                        "has no effect when setting reproducible=True."
+                    )
+            else:
+                outer_cv = self.outer_cv
+
+            # TODO: check, if is_classifier really recognizes RBC
+            outer_cv = check_cv(outer_cv, y, classifier=is_classifier(self.estimator))
+
             # CAUTION: THIS IS A HACK TO MAKE THE RESULTS REPRODUCIBLE!!!
             if self.reproducible:
+                if groups is not None:
+                    raise ValueError(
+                        "Supplying group lables for grouped CV splitting has "
+                        "no effect when setting reproducible=True."
+                    )
                 n_splits = self.outer_cv.get_n_splits()
-                self.outer_cv = StratifiedKFold(
+                outer_cv = StratifiedKFold(
                     n_splits=n_splits, shuffle=True, random_state=nexp2
                 )
 
             train_indices = []
             test_indices = []
             # for train, test in outer_cv.split(X, y):
-            for i, (train, test) in enumerate(self.outer_cv.split(X, y)):
+            for i, (train, test) in enumerate(outer_cv.split(X, y, groups)):
                 train_indices.append(train)
                 test_indices.append(test)
 
@@ -2564,9 +2283,23 @@ class RepeatedStratifiedNestedCV:
                     X_train, y_train = _safe_split(self.estimator.steps[-1][1], X, y, train)
                 else:
                     X_train, y_train = _safe_split(self.estimator, X, y, train)
+                if groups is not None:
+                    groups_train = groups[train]
+                else:
+                    groups_train = None
                 print('Repetition %s, outer split %s:' % (str(nexp2), str(i)))
                 print('Beginning of grid search at %s.' % generate_timestamp())
-                gs.fit(X_train, y_train)
+                gs = RepeatedGridSearchCV(
+                    estimator=self.estimator,
+                    param_grid=self.param_grid,
+                    scoring=self.scoring,
+                    cv=self.inner_cv,
+                    n_jobs=self.n_jobs,
+                    Nexp=self.Nexp1,
+                    save_to=self.save_inner_to,
+                    reproducible=self.reproducible
+                )
+                gs.fit(X_train, y_train, groups_train)
                 print('End of grid search at %s.' % generate_timestamp())
                 print('')
                 repeated_cv_results_list.append(gs.cv_results_)
@@ -2847,7 +2580,7 @@ class RepeatedStratifiedNestedCV:
                     timestamp=timestamp
                 )
 
-        if isinstance(self.save_to, dict):
+        if isinstance(self.save_to, dict) and self.tune_threshold:
             save_json(
                 tuning_curves,
                 self.save_to['directory'],
