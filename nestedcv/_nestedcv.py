@@ -732,7 +732,7 @@ class RepeatedGridSearchCV:
             estimator,
             param_grid: Union[Dict[str, List[Any]], List[Dict[str, List[Any]]]],
             *,
-            scoring: str = 'precision_recall_auc',
+            scoring: Union[List[str], str] = 'precision_recall_auc',
             cv: BaseCrossValidator = StratifiedKFold(n_splits=5, shuffle=True),
             n_jobs: Optional[int] = None,
             Nexp: int = 10,
