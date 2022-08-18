@@ -621,7 +621,7 @@ def adjusted_classes(
 
 
 class RepeatedGridSearchCV:
-    """A general class to handle nested cross-validated grid-search for any
+    """A general class to handle repeated grid-search cross-validation for any
     estimator that implements the scikit-learn estimator interface.
     Based on Algorithm 1 from Krstajic et al.: Cross-validation pitfalls when
     selecting and assessing regression and classification models. Journal of
@@ -1143,7 +1143,7 @@ class RepeatedGridSearchCV:
 
 
 class RepeatedStratifiedNestedCV:
-    """A class to handle repeated stratified nested cross-validated grid-search
+    """A class to handle repeated stratified nested cross-validation
     for any estimator that implements the scikit-learn estimator interface.
     Based on Algorithm 2 from Krstajic et al.: Cross-validation pitfalls when
     selecting and assessing regression and classification models. Journal of
