@@ -196,6 +196,7 @@ def save_json(
     directory: str,
     filename: str,
     timestamp: Union[bool, str] = True,
+    overwrite: bool = False,
 ) -> None:
     fn = filename_generator(filename, extension=".json", directory=directory,
                             timestamp=timestamp)
@@ -203,7 +204,11 @@ def save_json(
         with open(fn, 'w') as fp:
             json.dump(dictionary, fp, cls=NpEncoder)
     else:
-        print("The file", fn, "already exists!", sep=" ")
+        if overwrite:
+            with open(fn, 'w') as fp:
+                json.dump(dictionary, fp, cls=NpEncoder)
+        else:
+            print("The file", fn, "already exists!", sep=" ")
 
 
 def save_dataframe_to_excel(
