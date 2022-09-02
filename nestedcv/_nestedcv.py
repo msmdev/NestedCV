@@ -44,7 +44,7 @@ from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.metrics import f1_score, fbeta_score, log_loss, precision_score
 from sklearn.metrics import precision_recall_curve, recall_score, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, ParameterGrid
-from sklearn.utils import check_array, check_consistent_length, check_X_y, indexable
+from sklearn.utils import check_array, check_X_y, indexable
 from sklearn.metrics._classification import _check_targets
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.metaestimators import _safe_split
@@ -264,16 +264,33 @@ def save_dataframes_to_excel(
         print("The file", fn, "already exists!", sep=" ")
 
 
+def checker(
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Helper function to check/enforce correct input for classification metrics."""
+
+    if not (isinstance(y_true, (list, np.ndarray)) and isinstance(y_pred, (list, np.ndarray))):
+        raise ValueError("y_true, y_pred must be either of type list or np.ndarray.")
+    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
+    if not y_type == "binary":
+        raise ValueError(f"{y_type} is not supported")
+    if not isinstance(y_true, np.ndarray):
+        y_true = np.asarray(y_true)
+    if not isinstance(y_pred, np.ndarray):
+        y_pred = np.asarray(y_pred)
+    if not y_true.ndim == y_pred.ndim == 1:
+        raise ValueError("y_true, y_pred must be one-dimensional.")
+    return y_true, y_pred
+
+
 def specificity(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
     """sklearn-compartible function to calculate the specificity = (TN / (TN + FP))."""
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     TN, FP, _, _ = confusion_matrix(
         y_true, y_pred, labels=None, sample_weight=None, normalize=None
@@ -338,8 +355,8 @@ def Fbeta(
 
 
 def matthews_corrcoef(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
     sample_weight: Optional[np.ndarray] = None
 ) -> float:
     """Compute the Matthews correlation coefficient (MCC).
@@ -368,10 +385,7 @@ def matthews_corrcoef(
     Implementation based on sklearn.metrics.matthews_corrcoef (version 1.0.2).
     """
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred, sample_weight)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     C = confusion_matrix(y_true, y_pred, sample_weight=sample_weight)
     t_sum = C.sum(axis=1, dtype=np.float64)
@@ -391,14 +405,11 @@ def matthews_corrcoef(
 
 
 def negative_predictive_value(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     TN, _, FN, _ = confusion_matrix(
         y_true, y_pred, labels=None, sample_weight=None, normalize=None
@@ -416,14 +427,11 @@ def negative_predictive_value(
 
 
 def informedness(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     tpr = recall_score(y_true, y_pred, labels=None, pos_label=1, average='binary',
                        sample_weight=None, zero_division='warn')
@@ -434,14 +442,11 @@ def informedness(
 
 
 def markedness(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     ppv = precision_score(y_true, y_pred, labels=None, pos_label=1, average='binary',
                           sample_weight=None, zero_division='warn')
