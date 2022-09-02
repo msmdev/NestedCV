@@ -1831,6 +1831,55 @@ class RepeatedStratifiedNestedCV:
         y_train: np.ndarray,
         threshold: Optional[float] = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Internal helper function to generate predictions
+        (and probabilities, if the estimator supports it) for a train and a test set,
+        taking a decision threshold (if supplied) - applied on the probabilities to
+        generate the predictions - into account (if the estimator supports probabilities).
+
+        Parameters
+        ----------
+        X_test : numpy.ndarray of shape (n_samples_test, n_features) or
+        (n_samples_test, n_samples_test)
+            Testing matrix, where n_samples_test is the number of samples and n_features
+            is the number of features. For SVM models with `kernel='precomputed'`,
+            the expected shape of `X` is (n_samples_test, n_samples_test).
+
+        y_test : numpy.ndarray of shape (n_samples_test,)
+            Target values relative to `X_test`.
+
+        X_train : numpy.ndarray of shape (n_samples_train, n_features) or
+        (n_samples_train, n_samples_train)
+            Training matrix, where n_samples_train is the number of samples and n_features
+            is the number of features. For SVM models with `kernel='precomputed'`,
+            the expected shape of `X` is (n_samples_train, n_samples_train).
+
+        y_train : numpy.ndarray of shape (n_samples_train,)
+            Target values relative to `X_train`.
+
+        Returns
+        -------
+        y_proba_test : numpy.ndarray
+            Result of calling `predict_proba` on the estimator
+            or final estimator of the pipeline using the test data.
+            If the estimator doesn't support probabilities,
+            numpyp.full((y_test.shape[0],), fill_value=numpyp.nan)
+            will be returned.
+
+        y_pred_test : numpy.ndarray
+            Result of calling `predict` on the estimator
+            or final estimator of the pipeline using the test data.
+
+        y_proba_train : numpy.ndarray
+            Result of calling `predict_proba` on the estimator
+            or final estimator of the pipeline using the train data.
+            If the estimator doesn't support probabilities,
+            numpyp.full((y_train.shape[0],), fill_value=numpyp.nan)
+            will be returned.
+
+        y_pred_train : numpy.ndarray
+            Result of calling `predict` on the estimator
+            or final estimator of the pipeline using the train data.
+        """
         assert X_train.shape[0] == y_train.shape[0], \
             "X_train.shape[0] != y_train.shape[0] in _predict."
         assert X_test.shape[0] == y_test.shape[0], \
@@ -1861,7 +1910,7 @@ class RepeatedStratifiedNestedCV:
             y_proba_test = np.full((y_test.shape[0],), fill_value=np.nan)
             # predict test classes
             y_pred_test = self.estimator.predict(X_test)
-        return y_proba_train, y_pred_train, y_proba_test, y_pred_test
+        return y_proba_test, y_pred_test, y_proba_train, y_pred_train
 
     def _score(
         self,
@@ -1971,11 +2020,22 @@ class RepeatedStratifiedNestedCV:
         which maximize the threshold tuning scoring on the outer training
         folds for the best parameters (rank 1) found during grid search,
         is used as decision threshold for class prediction.
+
         Parameters
         ----------
-        X : indexable, length n_samples
-            Must fulfill the input assumptions of the
-            underlying estimator.
+        X : numpy.ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+            Data to predict on. Must fulfill the input requirements of the estimator
+            or the first step of the pipeline (if a pipeline was supplied).
+            For SVM estimators with `kernel='precomputed'`, the expected shape
+            of `X` is (n_samples_test, n_samples_train).
+
+        Returns
+        -------
+        y_pred : numpy.ndarray
+            Result of calling `predict` (or `predict_proba` and applying a
+            determined decision threshold on the probabilities to convert
+            them into predictions) on the estimator or final estimator of
+            the pipeline.
         """
         # Check, if fit had been called
         check_is_fitted(self)
@@ -2002,11 +2062,20 @@ class RepeatedStratifiedNestedCV:
         """Call predict_proba on the estimator with the best found parameters.
         Only available if ``cv_options['refit']=True`` and the underlying
         estimator supports ``predict_proba``.
+
         Parameters
         ----------
-        X : indexable, length n_samples
-            Must fulfill the input assumptions of the
-            underlying estimator.
+        X : numpy.ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+            Data to predict on. Must fulfill the input requirements of the estimator
+            or the first step of the pipeline (if a pipeline was supplied).
+            For SVM estimators with `kernel='precomputed'`, the expected shape
+            of `X` is (n_samples_test, n_samples_train).
+
+        Returns
+        -------
+        y_proba : numpy.ndarray of shape (n_samples, n_classes)
+            Result of calling `predict_proba` on the estimator
+            or final estimator of the pipeline.
         """
         # Check, if fit had been called
         check_is_fitted(self)
@@ -2036,12 +2105,14 @@ class RepeatedStratifiedNestedCV:
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
-            Training vector, where n_samples is the number of samples and
-            n_features is the number of features.
+        X : numpy.ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+            Traiming matrix. Must fulfill the input requirements of the estimator
+            or the first step of the pipeline (if a pipeline was supplied).
+            For SVM estimators with `kernel='precomputed'`, the expected shape
+            of `X` is (n_samples_test, n_samples_train).
 
-        y : numpy.ndarray of shape (n_samples, n_output) or (n_samples,)
-            Target relative to X for classification.
+        y : numpy.ndarray of shape (n_samples,)
+            Target values relative to `X`.
 
         baseline_prediction : None or numpy.ndarray of shape (n_samples,), default=None
             Given baseline prediction of the target.
@@ -2072,14 +2143,14 @@ class RepeatedStratifiedNestedCV:
 
         ranked_best_inner_params_
             Ranked (most frequent first) best inner params as a list of
-            dictionaries (every dict, i.e. parameter combination,
+            dictionaries (every dict, i.e., parameter combination,
             occurs only once).
 
         best_inner_params_
             Best inner params for each outer loop as a list of dictionaries.
 
         best_thresholds_
-            If cv_options['tune_threshold']=True, this is a dict containing the best thresholds
+            If `cv_options['tune_threshold']=True`, this is a dict containing the best thresholds
             and threshold-tuning-scorings for each scoring-threshold_tuning_scoring-pair.
             Given as a dict with scorings as keys and dicts as values. Each of these dicts
             given as {'best_<threshold_tuning_scoring>': value, 'best_theshold': value}
@@ -2089,14 +2160,14 @@ class RepeatedStratifiedNestedCV:
             Else the dict is empty.
 
         best_estimator_
-            If cv_options['refit'] is set to True or a str denoting a valid scoring metric,
+            If `cv_options['refit']` is set to True or a str denoting a valid scoring metric,
             this gives the best estimator refitted on the whole dataset using
             the best parameters (rank 1) found during grid search.
             For multiple metric evaluation, the scoring given via the refit key
             is used to find the best parameters for refitting the estimator at the end.
 
         mean_best_threshold_
-            If cv_options['refit'] is set to True or a str denoting a valid scoring metric,
+            If `cv_options['refit']` is set to True or a str denoting a valid scoring metric,
             this gives the mean of the best thresholds, which maximize the threshold
             tuning scoring on the outer training folds for the best parameters (rank 1)
             found during grid search.
@@ -2104,18 +2175,18 @@ class RepeatedStratifiedNestedCV:
             is used to find the best parameters.
 
         repeated_cv_results_lists_
-            List of Nexp2 lists of n_split_outer dicts. Each dict contains the
-            compiled results of Nexp1 iterations of n_split_inner-fold cross-
+            List of `Nexp2` lists of `n_split_outer` dicts. Each dict contains the
+            compiled results of `Nexp1` iterations of `n_split_inner`-fold cross-
             validated grid searches with keys as column headers and values as columns.
             Each of those dicts can be imported into a pandas DataFrame.
 
         repeated_cv_results_as_dataframes_list_
-            List of Nexp2 lists of n_split_outer pandas dataframes containing
-            the compiled results of of Nexp1 iterations of n_split_inner-fold
+            List of `Nexp2` lists of `n_split_outer` pandas dataframes containing
+            the compiled results of of `Nexp1` iterations of `n_split_inner`-fold
             cross-validated grid searches.
 
         repeated_nested_cv_results_
-            A list of Nexp2 dicts of compiled nested CV results.
+            A list of `Nexp2` dicts of compiled nested CV results.
         """
 
         if isinstance(X, pd.DataFrame):
@@ -2489,10 +2560,10 @@ class RepeatedStratifiedNestedCV:
                         best_threshold = None
                     # generate train/test predictions and probabilities
                     y_p: Dict[str, Dict[str, np.ndarray]] = {'pred': dict(), 'proba': dict()}
-                    (y_p['proba']['train'],
-                     y_p['pred']['train'],
-                     y_p['proba']['test'],
-                     y_p['pred']['test']) = self._predict(
+                    (y_p['proba']['test'],
+                     y_p['pred']['test'],
+                     y_p['proba']['train'],
+                     y_p['pred']['train']) = self._predict(
                         X_dict['test'], y_dict['test'], X_dict['train'], y_dict['train'],
                         threshold=best_threshold
                     )
