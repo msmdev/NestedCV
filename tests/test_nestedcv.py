@@ -158,94 +158,109 @@ def test_RNCV_single(
 
     all_results = clf_grid.repeated_nested_cv_results_
 
-    length = cv_options['Nexp2'] * cv_options['outer_cv']
+    if isinstance(cv_options['Nexp2'], int) and isinstance(cv_options['outer_cv'], int):
+        length = cv_options['Nexp2'] * cv_options['outer_cv']
+    else:
+        raise ValueError(
+            "Both cv_options['Nexp2'] and cv_options['outer_cv'] must be integers."
+        )
+
     assert list(all_results.keys()) == cv_options['scoring']
-    for scoring, threshold_tuning_scoring in zip(
-            cv_options['scoring'], cv_options['threshold_tuning_scoring']):
-        results = all_results[scoring]
-        for key in results.keys():
-            if key == f'best_{threshold_tuning_scoring}':
-                assert threshold_tuning_scoring is not None
-                assert len(results[key]) == length
-                assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif key == 'best_inner_indices':
-                assert len(results[key]) == length
-                assert np.all(results[key] == 10)
-            elif key == 'best_inner_params':
-                assert len(results[key]) == length
-                assert all(x == {'alpha': 1.0} for x in results[key])
-            elif key == 'best_inner_scores':
-                assert len(results[key]) == length
-                if bool(re.search(r"log_loss", scoring)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.search(r"brier_loss", scoring)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
+
+    if (isinstance(cv_options['scoring'], list) and
+            isinstance(cv_options['threshold_tuning_scoring'], list)):
+        for scoring, threshold_tuning_scoring in zip(
+                cv_options['scoring'], cv_options['threshold_tuning_scoring']):
+
+            results = all_results[scoring]
+
+            for key in results.keys():
+                if key == f'best_{threshold_tuning_scoring}':
+                    assert threshold_tuning_scoring is not None
+                    assert len(results[key]) == length
                     assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif key == 'best_params':
-                assert results[key] == {'alpha': [1.0]}
-            elif key == 'best_threshold':
-                assert threshold_tuning_scoring is not None
-                assert f'best_{threshold_tuning_scoring}' in results.keys()
-                assert len(results[key]) == length
-                assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"max_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"max_(test|train|ncv)_log_loss", key)):
-                    assert 0.98 * log_loss <= results[key] < 1.2 * log_loss
-                elif bool(re.match(r"max_(test|train|ncv)_brier_loss", key)):
-                    assert 0.98 * brier_loss <= results[key] < 1.2 * brier_loss
-                elif key == 'max_best_threshold':
+                elif key == 'best_inner_indices':
+                    assert len(results[key]) == length
+                    assert np.all(results[key] == 10)
+                elif key == 'best_inner_params':
+                    assert len(results[key]) == length
+                    assert all(x == {'alpha': 1.0} for x in results[key])
+                elif key == 'best_inner_scores':
+                    assert len(results[key]) == length
+                    if bool(re.search(r"log_loss", scoring)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.search(r"brier_loss", scoring)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.01, atol=0.0)
+                elif key == 'best_params':
+                    assert results[key] == {'alpha': [1.0]}
+                elif key == 'best_threshold':
+                    assert threshold_tuning_scoring is not None
+                    assert f'best_{threshold_tuning_scoring}' in results.keys()
+                    assert len(results[key]) == length
                     assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"max_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"max_(test|train|ncv)_log_loss", key)):
+                        assert 0.98 * log_loss <= results[key] < 1.2 * log_loss
+                    elif bool(re.match(r"max_(test|train|ncv)_brier_loss", key)):
+                        assert 0.98 * brier_loss <= results[key] < 1.2 * brier_loss
+                    elif key == 'max_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.01, atol=0.0)
+                elif bool(re.fullmatch(r"mean_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"mean_(test|train|ncv)_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"mean_(test|train|ncv)_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    elif key == 'mean_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], 1.0, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"min_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"min_(test|train|ncv)_log_loss", key)):
+                        assert 1.02 * log_loss >= results[key] > 0.8 * log_loss
+                    elif bool(re.match(r"min_(test|train|ncv)_brier_loss", key)):
+                        assert 1.02 * brier_loss >= results[key] > 0.8 * brier_loss
+                    elif key == 'min_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.03, atol=0.0)
+                elif bool(re.fullmatch(r"ncv_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == cv_options['Nexp2']
+                    if bool(re.match(r"ncv_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"ncv_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"std_[a-zA-Z0-9_]+", key)):
+                    assert results[key] < 0.05
+                elif key == 'ranked_best_inner_params':
+                    assert results[key] == [{'frequency': length, 'parameters': {'alpha': 1.0}}]
+                elif bool(re.fullmatch(r"test_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == length
+                    if bool(re.match(r"test_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.2, atol=0.0)
+                    elif bool(re.match(r"test_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.2, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.03, atol=0.0)
+                elif bool(re.fullmatch(r"train_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == length
+                    if bool(re.match(r"train_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"train_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.02, atol=0.0)
                 else:
-                    assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif bool(re.fullmatch(r"mean_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"mean_(test|train|ncv)_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"mean_(test|train|ncv)_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                elif key == 'mean_best_threshold':
-                    assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-                else:
-                    assert_allclose(results[key], 1.0, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"min_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"min_(test|train|ncv)_log_loss", key)):
-                    assert 1.02 * log_loss >= results[key] > 0.8 * log_loss
-                elif bool(re.match(r"min_(test|train|ncv)_brier_loss", key)):
-                    assert 1.02 * brier_loss >= results[key] > 0.8 * brier_loss
-                elif key == 'min_best_threshold':
-                    assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.03, atol=0.0)
-            elif bool(re.fullmatch(r"ncv_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == cv_options['Nexp2']
-                if bool(re.match(r"ncv_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"ncv_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"std_[a-zA-Z0-9_]+", key)):
-                assert results[key] < 0.05
-            elif key == 'ranked_best_inner_params':
-                assert results[key] == [{'frequency': length, 'parameters': {'alpha': 1.0}}]
-            elif bool(re.fullmatch(r"test_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == length
-                if bool(re.match(r"test_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.2, atol=0.0)
-                elif bool(re.match(r"test_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.2, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.03, atol=0.0)
-            elif bool(re.fullmatch(r"train_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == length
-                if bool(re.match(r"train_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"train_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.02, atol=0.0)
-            else:
-                raise ValueError("Unexpected key: %s" % key)
+                    raise ValueError("Unexpected key: %s" % key)
+    else:
+        raise ValueError(
+            "Both cv_options['scoring'] and cv_options['threshold_tuning_scoring'] must be lists."
+        )
 
 
 def test_RNCV_repeated(
@@ -304,94 +319,109 @@ def test_RNCV_repeated(
 
     all_results = clf_grid.repeated_nested_cv_results_
 
-    length = cv_options['Nexp2'] * cv_options['outer_cv']
+    if isinstance(cv_options['Nexp2'], int) and isinstance(cv_options['outer_cv'], int):
+        length = cv_options['Nexp2'] * cv_options['outer_cv']
+    else:
+        raise ValueError(
+            "Both cv_options['Nexp2'] and cv_options['outer_cv'] must be integers."
+        )
+
     assert list(all_results.keys()) == cv_options['scoring']
-    for scoring, threshold_tuning_scoring in zip(
-            cv_options['scoring'], cv_options['threshold_tuning_scoring']):
-        results = all_results[scoring]
-        for key in results.keys():
-            if key == f'best_{threshold_tuning_scoring}':
-                assert threshold_tuning_scoring is not None
-                assert len(results[key]) == length
-                assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif key == 'best_inner_indices':
-                assert len(results[key]) == length
-                assert np.all(results[key] == 10)
-            elif key == 'best_inner_params':
-                assert len(results[key]) == length
-                assert all(x == {'alpha': 1.0} for x in results[key])
-            elif key == 'best_inner_scores':
-                assert len(results[key]) == length
-                if bool(re.search(r"log_loss", scoring)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.search(r"brier_loss", scoring)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
+
+    if (isinstance(cv_options['scoring'], list) and
+            isinstance(cv_options['threshold_tuning_scoring'], list)):
+        for scoring, threshold_tuning_scoring in zip(
+                cv_options['scoring'], cv_options['threshold_tuning_scoring']):
+
+            results = all_results[scoring]
+
+            for key in results.keys():
+                if key == f'best_{threshold_tuning_scoring}':
+                    assert threshold_tuning_scoring is not None
+                    assert len(results[key]) == length
                     assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif key == 'best_params':
-                assert results[key] == {'alpha': [1.0]}
-            elif key == 'best_threshold':
-                assert threshold_tuning_scoring is not None
-                assert f'best_{threshold_tuning_scoring}' in results.keys()
-                assert len(results[key]) == length
-                assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"max_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"max_(test|train|ncv)_log_loss", key)):
-                    assert 0.98 * log_loss <= results[key] < 1.2 * log_loss
-                elif bool(re.match(r"max_(test|train|ncv)_brier_loss", key)):
-                    assert 0.98 * brier_loss <= results[key] < 1.2 * brier_loss
-                elif key == 'max_best_threshold':
+                elif key == 'best_inner_indices':
+                    assert len(results[key]) == length
+                    assert np.all(results[key] == 10)
+                elif key == 'best_inner_params':
+                    assert len(results[key]) == length
+                    assert all(x == {'alpha': 1.0} for x in results[key])
+                elif key == 'best_inner_scores':
+                    assert len(results[key]) == length
+                    if bool(re.search(r"log_loss", scoring)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.search(r"brier_loss", scoring)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.01, atol=0.0)
+                elif key == 'best_params':
+                    assert results[key] == {'alpha': [1.0]}
+                elif key == 'best_threshold':
+                    assert threshold_tuning_scoring is not None
+                    assert f'best_{threshold_tuning_scoring}' in results.keys()
+                    assert len(results[key]) == length
                     assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"max_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"max_(test|train|ncv)_log_loss", key)):
+                        assert 0.98 * log_loss <= results[key] < 1.2 * log_loss
+                    elif bool(re.match(r"max_(test|train|ncv)_brier_loss", key)):
+                        assert 0.98 * brier_loss <= results[key] < 1.2 * brier_loss
+                    elif key == 'max_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.01, atol=0.0)
+                elif bool(re.fullmatch(r"mean_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"mean_(test|train|ncv)_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"mean_(test|train|ncv)_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    elif key == 'mean_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], 1.0, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"min_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"min_(test|train|ncv)_log_loss", key)):
+                        assert 1.02 * log_loss >= results[key] > 0.8 * log_loss
+                    elif bool(re.match(r"min_(test|train|ncv)_brier_loss", key)):
+                        assert 1.02 * brier_loss >= results[key] > 0.8 * brier_loss
+                    elif key == 'min_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.03, atol=0.0)
+                elif bool(re.fullmatch(r"ncv_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == cv_options['Nexp2']
+                    if bool(re.match(r"ncv_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"ncv_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"std_[a-zA-Z0-9_]+", key)):
+                    assert results[key] < 0.05
+                elif key == 'ranked_best_inner_params':
+                    assert results[key] == [{'frequency': length, 'parameters': {'alpha': 1.0}}]
+                elif bool(re.fullmatch(r"test_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == length
+                    if bool(re.match(r"test_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.2, atol=0.0)
+                    elif bool(re.match(r"test_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.2, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.03, atol=0.0)
+                elif bool(re.fullmatch(r"train_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == length
+                    if bool(re.match(r"train_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"train_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.02, atol=0.0)
                 else:
-                    assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif bool(re.fullmatch(r"mean_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"mean_(test|train|ncv)_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"mean_(test|train|ncv)_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                elif key == 'mean_best_threshold':
-                    assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-                else:
-                    assert_allclose(results[key], 1.0, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"min_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"min_(test|train|ncv)_log_loss", key)):
-                    assert 1.02 * log_loss >= results[key] > 0.8 * log_loss
-                elif bool(re.match(r"min_(test|train|ncv)_brier_loss", key)):
-                    assert 1.02 * brier_loss >= results[key] > 0.8 * brier_loss
-                elif key == 'min_best_threshold':
-                    assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.03, atol=0.0)
-            elif bool(re.fullmatch(r"ncv_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == cv_options['Nexp2']
-                if bool(re.match(r"ncv_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"ncv_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"std_[a-zA-Z0-9_]+", key)):
-                assert results[key] < 0.05
-            elif key == 'ranked_best_inner_params':
-                assert results[key] == [{'frequency': length, 'parameters': {'alpha': 1.0}}]
-            elif bool(re.fullmatch(r"test_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == length
-                if bool(re.match(r"test_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.2, atol=0.0)
-                elif bool(re.match(r"test_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.2, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.03, atol=0.0)
-            elif bool(re.fullmatch(r"train_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == length
-                if bool(re.match(r"train_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"train_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.02, atol=0.0)
-            else:
-                raise ValueError("Unexpected key: %s" % key)
+                    raise ValueError("Unexpected key: %s" % key)
+    else:
+        raise ValueError(
+            "Both cv_options['scoring'] and cv_options['threshold_tuning_scoring'] must be lists."
+        )
 
 
 def test_RNCV_repeated_parallel(
@@ -450,94 +480,109 @@ def test_RNCV_repeated_parallel(
 
     all_results = clf_grid.repeated_nested_cv_results_
 
-    length = cv_options['Nexp2'] * cv_options['outer_cv']
+    if isinstance(cv_options['Nexp2'], int) and isinstance(cv_options['outer_cv'], int):
+        length = cv_options['Nexp2'] * cv_options['outer_cv']
+    else:
+        raise ValueError(
+            "Both cv_options['Nexp2'] and cv_options['outer_cv'] must be integers."
+        )
+
     assert list(all_results.keys()) == cv_options['scoring']
-    for scoring, threshold_tuning_scoring in zip(
-            cv_options['scoring'], cv_options['threshold_tuning_scoring']):
-        results = all_results[scoring]
-        for key in results.keys():
-            if key == f'best_{threshold_tuning_scoring}':
-                assert threshold_tuning_scoring is not None
-                assert len(results[key]) == length
-                assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif key == 'best_inner_indices':
-                assert len(results[key]) == length
-                assert np.all(results[key] == 10)
-            elif key == 'best_inner_params':
-                assert len(results[key]) == length
-                assert all(x == {'alpha': 1.0} for x in results[key])
-            elif key == 'best_inner_scores':
-                assert len(results[key]) == length
-                if bool(re.search(r"log_loss", scoring)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.search(r"brier_loss", scoring)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
+
+    if (isinstance(cv_options['scoring'], list) and
+            isinstance(cv_options['threshold_tuning_scoring'], list)):
+        for scoring, threshold_tuning_scoring in zip(
+                cv_options['scoring'], cv_options['threshold_tuning_scoring']):
+
+            results = all_results[scoring]
+
+            for key in results.keys():
+                if key == f'best_{threshold_tuning_scoring}':
+                    assert threshold_tuning_scoring is not None
+                    assert len(results[key]) == length
                     assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif key == 'best_params':
-                assert results[key] == {'alpha': [1.0]}
-            elif key == 'best_threshold':
-                assert threshold_tuning_scoring is not None
-                assert f'best_{threshold_tuning_scoring}' in results.keys()
-                assert len(results[key]) == length
-                assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"max_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"max_(test|train|ncv)_log_loss", key)):
-                    assert 0.98 * log_loss <= results[key] < 1.2 * log_loss
-                elif bool(re.match(r"max_(test|train|ncv)_brier_loss", key)):
-                    assert 0.98 * brier_loss <= results[key] < 1.2 * brier_loss
-                elif key == 'max_best_threshold':
+                elif key == 'best_inner_indices':
+                    assert len(results[key]) == length
+                    assert np.all(results[key] == 10)
+                elif key == 'best_inner_params':
+                    assert len(results[key]) == length
+                    assert all(x == {'alpha': 1.0} for x in results[key])
+                elif key == 'best_inner_scores':
+                    assert len(results[key]) == length
+                    if bool(re.search(r"log_loss", scoring)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.search(r"brier_loss", scoring)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.01, atol=0.0)
+                elif key == 'best_params':
+                    assert results[key] == {'alpha': [1.0]}
+                elif key == 'best_threshold':
+                    assert threshold_tuning_scoring is not None
+                    assert f'best_{threshold_tuning_scoring}' in results.keys()
+                    assert len(results[key]) == length
                     assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"max_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"max_(test|train|ncv)_log_loss", key)):
+                        assert 0.98 * log_loss <= results[key] < 1.2 * log_loss
+                    elif bool(re.match(r"max_(test|train|ncv)_brier_loss", key)):
+                        assert 0.98 * brier_loss <= results[key] < 1.2 * brier_loss
+                    elif key == 'max_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.01, atol=0.0)
+                elif bool(re.fullmatch(r"mean_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"mean_(test|train|ncv)_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"mean_(test|train|ncv)_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    elif key == 'mean_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], 1.0, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"min_[a-zA-Z0-9_]+", key)):
+                    if bool(re.match(r"min_(test|train|ncv)_log_loss", key)):
+                        assert 1.02 * log_loss >= results[key] > 0.8 * log_loss
+                    elif bool(re.match(r"min_(test|train|ncv)_brier_loss", key)):
+                        assert 1.02 * brier_loss >= results[key] > 0.8 * brier_loss
+                    elif key == 'min_best_threshold':
+                        assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.03, atol=0.0)
+                elif bool(re.fullmatch(r"ncv_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == cv_options['Nexp2']
+                    if bool(re.match(r"ncv_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"ncv_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.02, atol=0.0)
+                elif bool(re.fullmatch(r"std_[a-zA-Z0-9_]+", key)):
+                    assert results[key] < 0.05
+                elif key == 'ranked_best_inner_params':
+                    assert results[key] == [{'frequency': length, 'parameters': {'alpha': 1.0}}]
+                elif bool(re.fullmatch(r"test_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == length
+                    if bool(re.match(r"test_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.2, atol=0.0)
+                    elif bool(re.match(r"test_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.2, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.03, atol=0.0)
+                elif bool(re.fullmatch(r"train_[a-zA-Z0-9_]+", key)):
+                    assert results[key].size == length
+                    if bool(re.match(r"train_log_loss", key)):
+                        assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
+                    elif bool(re.match(r"train_brier_loss", key)):
+                        assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
+                    else:
+                        assert_allclose(results[key], score, rtol=0.02, atol=0.0)
                 else:
-                    assert_allclose(results[key], score, rtol=0.01, atol=0.0)
-            elif bool(re.fullmatch(r"mean_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"mean_(test|train|ncv)_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"mean_(test|train|ncv)_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                elif key == 'mean_best_threshold':
-                    assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-                else:
-                    assert_allclose(results[key], 1.0, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"min_[a-zA-Z0-9_]+", key)):
-                if bool(re.match(r"min_(test|train|ncv)_log_loss", key)):
-                    assert 1.02 * log_loss >= results[key] > 0.8 * log_loss
-                elif bool(re.match(r"min_(test|train|ncv)_brier_loss", key)):
-                    assert 1.02 * brier_loss >= results[key] > 0.8 * brier_loss
-                elif key == 'min_best_threshold':
-                    assert_allclose(results[key], threshold, rtol=0.02, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.03, atol=0.0)
-            elif bool(re.fullmatch(r"ncv_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == cv_options['Nexp2']
-                if bool(re.match(r"ncv_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"ncv_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.02, atol=0.0)
-            elif bool(re.fullmatch(r"std_[a-zA-Z0-9_]+", key)):
-                assert results[key] < 0.05
-            elif key == 'ranked_best_inner_params':
-                assert results[key] == [{'frequency': length, 'parameters': {'alpha': 1.0}}]
-            elif bool(re.fullmatch(r"test_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == length
-                if bool(re.match(r"test_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.2, atol=0.0)
-                elif bool(re.match(r"test_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.2, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.03, atol=0.0)
-            elif bool(re.fullmatch(r"train_[a-zA-Z0-9_]+", key)):
-                assert results[key].size == length
-                if bool(re.match(r"train_log_loss", key)):
-                    assert_allclose(results[key], log_loss, rtol=0.1, atol=0.0)
-                elif bool(re.match(r"train_brier_loss", key)):
-                    assert_allclose(results[key], brier_loss, rtol=0.1, atol=0.0)
-                else:
-                    assert_allclose(results[key], score, rtol=0.02, atol=0.0)
-            else:
-                raise ValueError("Unexpected key: %s" % key)
+                    raise ValueError("Unexpected key: %s" % key)
+    else:
+        raise ValueError(
+            "Both cv_options['scoring'] and cv_options['threshold_tuning_scoring'] must be lists."
+        )
 
 
 def test_RNCV_precomputed_kernel() -> None:
