@@ -1802,8 +1802,6 @@ class RepeatedStratifiedNestedCV:
                 recall_marker_label='Recall=%.6f\nThreshold=%.6f' % (recall[idx], best_threshold),
                 directory=self.save_pr_plots['directory'], filename=fn, timestamp=timestamp
             )
-        else:
-            warnings.warn("Couldn't plot precision-recall-threshold-tuning-curves.")
         return precision, recall, threshold, best_threshold, best_fbeta
 
     def _tune_threshold_by_roc(
@@ -1863,8 +1861,6 @@ class RepeatedStratifiedNestedCV:
                 recall_marker_label='Recall=%.6f\nThreshold=%.6f' % (tpr[idx], best_threshold),
                 directory=self.save_pr_plots['directory'], filename=fn, timestamp=timestamp
             )
-        else:
-            warnings.warn("Couldn't plot ROC-threshold-tuning-curves.")
         return fpr, tpr, threshold, best_threshold, best_score
 
     def _predict(
@@ -2501,7 +2497,8 @@ class RepeatedStratifiedNestedCV:
                 y_D = []
                 rules_list = []
 
-                # if threshold is tuned, plot all specificity-recall-plots together
+                # if requested and if threshold is tuned,
+                # plot all specificity-recall-plots together
                 if self.tune_threshold is True and isinstance(self.save_tt_plots, dict):
                     # markers = ['.', 'o', 'v', '^', '>', '<', 's', '*', 'x', 'D']
                     plt.figure(figsize=(8, 8))
