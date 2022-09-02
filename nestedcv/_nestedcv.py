@@ -743,7 +743,9 @@ class RepeatedGridSearchCV:
             param_grid: Union[Dict[str, List[Any]], List[Dict[str, List[Any]]]],
             *,
             scoring: Union[List[str], str] = 'precision_recall_auc',
-            cv: BaseCrossValidator = StratifiedKFold(n_splits=5, shuffle=True),
+            cv: Union[
+                BaseCrossValidator, List[BaseCrossValidator], int
+            ] = StratifiedKFold(n_splits=5, shuffle=True),
             n_jobs: Optional[int] = None,
             Nexp: int = 10,
             save_to: Optional[Dict[str, str]] = None,
@@ -813,15 +815,15 @@ class RepeatedGridSearchCV:
         if not y_type == "binary":
             raise ValueError("Currently only binary targets are supported.")
 
-        grid = list(ParameterGrid(param_grid=self.param_grid))
+        grid: List[Dict[str, Any]] = list(ParameterGrid(param_grid=self.param_grid))
 
-        cv_results = {}
+        cv_results: Dict[str, Union[List[Dict[str, Any]], np.ndarray]] = {}
         cv_results['params'] = grid
         for i, param_dict in enumerate(grid):
             for key in param_dict.keys():
                 if key not in cv_results.keys():
                     cv_results[key] = np.ma.MaskedArray(
-                        np.full(len(grid), np.nan, dtype=np.object), mask=True
+                        np.full(len(grid), np.nan, dtype=object), mask=True
                     )
                     cv_results[key][i] = param_dict[key]
                 else:
@@ -874,6 +876,8 @@ class RepeatedGridSearchCV:
                     else:
                         raise TypeError("'estimator' should be an estimator implementing "
                                         "'predict_proba' method, %r was passed" % self.estimator)
+        if not (collect_predictions or collect_probabilities):
+            raise ValueError("Neither Predictions nor Probabilities are collected.")
 
         # 1. Repeat the following process Nexp times
         for nexp in range(self.Nexp):
@@ -995,25 +999,13 @@ class RepeatedGridSearchCV:
                 y_tests_list.append(y_tests)
 
             # collect probabilties and labels belonging to each point of the grid
-            if collect_predictions and collect_probabilities:
-                Predictions: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-                Probabilities: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-            elif collect_predictions and not collect_probabilities:
-                Predictions: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-                Probabilities = None
-            elif not collect_predictions and collect_probabilities:
-                Predictions = None
-                Probabilities: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-            else:
-                raise ValueError("Neither Predictions nor Probabilities are collected.")
+            Predictions: Dict[str, List[float]] = {
+                str(tuple(sorted(x.items()))): [] for x in grid
+            }
+            Probabilities: Dict[str, List[float]] = {
+                str(tuple(sorted(x.items()))): [] for x in grid
+            }
+
             y_D: Dict[str, List[float]] = {
                     str(tuple(sorted(x.items()))): [] for x in grid
                 }
@@ -1068,21 +1060,29 @@ class RepeatedGridSearchCV:
                             )
                         )
                     elif scoring == 'pseudo_f1':
-                        param_scores[scoring].append(Fbeta(
+                        fbeta = Fbeta(
                             specificity(y_D[key], Predictions[key]),
                             recall_score(y_D[key], Predictions[key], labels=None, pos_label=1,
                                          average='binary', sample_weight=None,
                                          zero_division='warn'),
-                            beta=1.0)
+                            beta=1.0
                         )
+                        if isinstance(fbeta, float):
+                            param_scores[scoring].append(fbeta)
+                        else:
+                            raise ValueError("Fbeta() returned an array but a float was expected")
                     elif scoring == 'pseudo_f2':
-                        param_scores[scoring].append(Fbeta(
+                        fbeta = Fbeta(
                             specificity(y_D[key], Predictions[key]),
                             recall_score(y_D[key], Predictions[key], labels=None, pos_label=1,
                                          average='binary', sample_weight=None,
                                          zero_division='warn'),
-                            beta=2.0)
+                            beta=2.0
                         )
+                        if isinstance(fbeta, float):
+                            param_scores[scoring].append(fbeta)
+                        else:
+                            raise ValueError("Fbeta() returned an array but a float was expected")
                     elif scoring == 'sensitivity':
                         param_scores[scoring].append(recall_score(
                             y_D[key], Predictions[key], labels=None, pos_label=1,
@@ -1106,9 +1106,9 @@ class RepeatedGridSearchCV:
                 cv_results['iteration'+str(nexp)+'_'+scoring] = np.array(param_scores[scoring])
                 scores[scoring].append(np.array(param_scores[scoring]))
 
-        opt_scores = dict()
-        opt_scores_idcs = dict()
-        opt_params = dict()
+        opt_scores: Dict[str, float] = dict()
+        opt_scores_idcs: Dict[str, int] = dict()
+        opt_params: Dict[str, Dict[str, Any]] = dict()
         for scoring in scorings:
             score_array = np.array(scores[scoring])
 
@@ -1125,12 +1125,13 @@ class RepeatedGridSearchCV:
             # 3. Let α’ be the α value for which either
             # the average score is maximal or
             # the average loss is minimal.
+            opt_score_idx: int
             if bool(re.search(r'loss', scoring)):
                 opt_score = np.amin(mean_score)
-                opt_score_idx = np.argmin(mean_score)
+                opt_score_idx = int(np.argmin(mean_score))
             else:
                 opt_score = np.amax(mean_score)
-                opt_score_idx = np.argmax(mean_score)
+                opt_score_idx = int(np.argmax(mean_score))
             # If there are multiple α values for which the average score/loss is optimal,
             # then α’ is the one with the lowest standard deviation of the score/loss.
             if np.any(mean_score == opt_score):
@@ -1566,6 +1567,9 @@ class RepeatedStratifiedNestedCV:
             if key not in cv_options_keys:
                 raise ValueError(f"Unknown cv_options key '{key}'.")
 
+        self.n_jobs = cv_options.get('n_jobs', None)
+        self.Nexp1 = cv_options.get('Nexp1', 10)
+        self.Nexp2 = cv_options.get('Nexp2', 10)
         self.collect_rules = cv_options.get('collect_rules', False)
         inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(inner_cv, numbers.Number):
@@ -1590,9 +1594,6 @@ class RepeatedStratifiedNestedCV:
             raise ValueError("The value of the 'inner_cv' key must be either an integer, "
                              "to specify the number of folds, a CV splitter, or a list of "
                              "CV splitters of length Nexp1.")
-        self.n_jobs = cv_options.get('n_jobs', None)
-        self.Nexp1 = cv_options.get('Nexp1', 10)
-        self.Nexp2 = cv_options.get('Nexp2', 10)
         outer_cv = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(outer_cv, numbers.Number):
             self.outer_cv = StratifiedKFold(n_splits=outer_cv, shuffle=True)
@@ -1730,10 +1731,19 @@ class RepeatedStratifiedNestedCV:
         precision, recall, threshold = precision_recall_curve(y_train, y_proba_train,
                                                               pos_label=1, sample_weight=None)
         # convert to f-beta score
+        fbeta: np.ndarray
         if score == 'f1':
-            fbeta: np.ndarray = Fbeta(precision, recall, beta=1.0)
+            temp = Fbeta(precision, recall, beta=1.0)
+            if isinstance(temp, np.ndarray):
+                fbeta = temp
+            else:
+                raise ValueError("Fbeta() returned a float but an array was expected")
         elif score == 'f2':
-            fbeta = Fbeta(precision, recall, beta=2.0)
+            temp = Fbeta(precision, recall, beta=2.0)
+            if isinstance(temp, np.ndarray):
+                fbeta = temp
+            else:
+                raise ValueError("Fbeta() returned a float but an array was expected")
         else:
             raise ValueError("Score for tuning the threshold on the Precision-Recall curve "
                              "must be either 'f1' or 'f2'")
@@ -1914,13 +1924,25 @@ class RepeatedStratifiedNestedCV:
 
     def _score(
         self,
-        y: Union[np.ndarray, float],
-        y_pred: Union[np.ndarray, float],
-        y_proba: Union[np.ndarray, float] = np.nan,
+        y: Union[List[float], np.ndarray],
+        y_pred: Union[List[float], np.ndarray],
+        y_proba: Optional[Union[List[float], np.ndarray]] = None,
         scoring: str = 'mcc',
     ) -> float:
+
+        y, y_pred = checker(y, y_pred)
+        if y_proba is not None:
+            if not isinstance(y_proba, (list, np.ndarray)):
+                raise ValueError("y_prob must be either of type list or numpyp.ndarray.")
+            if not isinstance(y_proba, np.ndarray):
+                y_proba = np.asarray(y_proba)
+            if not y_proba.ndim == 1:
+                raise ValueError("y_proba must be one-dimensional.")
+            if not y_proba.shape == y.shape:
+                raise ValueError("y and y_proba must have the same length.")
+
         if scoring == 'average_precision':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = average_precision_score(
                     y, y_proba, average=None, pos_label=1, sample_weight=None
                 )
@@ -1931,7 +1953,7 @@ class RepeatedStratifiedNestedCV:
                 y, y_pred, sample_weight=None, adjusted=False
             )
         elif scoring == 'brier_loss':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = brier_score_loss(y, y_proba, sample_weight=None, pos_label=1)
             else:
                 score = np.nan
@@ -1954,7 +1976,7 @@ class RepeatedStratifiedNestedCV:
                y, y_pred, sample_weight=None
             )
         elif scoring == 'log_loss':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = log_loss(
                     y, y_proba, eps=1e-15, normalize=True, sample_weight=None, labels=None
                 )
@@ -1968,7 +1990,7 @@ class RepeatedStratifiedNestedCV:
                 sample_weight=None, zero_division='warn'
             )
         elif scoring == 'precision_recall_auc':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 precision, recall, _ = precision_recall_curve(y, y_proba,
                                                               pos_label=1,
                                                               sample_weight=None)
@@ -1992,7 +2014,7 @@ class RepeatedStratifiedNestedCV:
                 beta=2.0
             )
         elif scoring == 'roc_auc':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = roc_auc_score(
                     y, y_proba, average=None, sample_weight=None, max_fpr=None, labels=None
                 )
@@ -2450,8 +2472,9 @@ class RepeatedStratifiedNestedCV:
                     # markers = ['.', 'o', 'v', '^', '>', '<', 's', '*', 'x', 'D']
                     plt.figure(figsize=(8, 8))
                 for i, (train, test) in enumerate(zip(train_indices, test_indices)):
-                    y_dict = dict()
-                    X_dict = dict()
+                    y_dict: Dict[str, np.ndarray] = dict()
+                    X_dict: Dict[str, np.ndarray] = dict()
+                    # TODO: assert that the last step of the pipline is indeed an estimator
                     if isinstance(self.estimator, sklearn.pipeline.Pipeline):
                         X_dict['train'], y_dict['train'] = _safe_split(
                             self.estimator.steps[-1][1], X, y, train
