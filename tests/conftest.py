@@ -32,12 +32,12 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.metrics import make_scorer, matthews_corrcoef
 from pandas import DataFrame
-from typing import List, Union, Any
+from typing import Dict, List, Union, Any
 
 
 def assert_allclose(
-    actual: Union[np.ndarray, List[Union[float, int]]],
-    desired: Union[np.ndarray, List[Union[float, int]]],
+    actual: Union[np.ndarray, List[Union[float, int]], float, int],
+    desired: Union[np.ndarray, List[Union[float, int]], float, int],
     rtol: float = 1.0e-5,
     atol: float = 1.0e-8,
     err_msg: str = '',
@@ -180,7 +180,8 @@ class dummy_classifier(ClassifierMixin, BaseEstimator):
             Test samples.
         y : np.ndarray of shape (n_samples,) or (n_samples, n_outputs)
             True labels for `X`.
-        metric : optional. Metric function, if left empty the MCC score will be used.
+        metric : str | callable, default='MCC'
+            A callable metric function, if left empty the MCC score will be used.
         Returns
         -------
         score : float
@@ -193,14 +194,16 @@ class dummy_classifier(ClassifierMixin, BaseEstimator):
         if metric == 'MCC':
             mcc = make_scorer(matthews_corrcoef)
             score_value = mcc(self, X, y)
-        else:
+        elif callable(metric):
             score_value = metric(y, self.predict(X))
+        else:
+            raise ValueError("Supplied metric must be either 'MCC' or a callable.")
 
         return score_value
 
 
 @pytest.fixture(scope="session")
-def X():
+def X() -> np.ndarray:
     n = 1000
     return np.array(
         [[1.0] * i + [0.0] * (n - i) for i in range(n + 1)],
@@ -209,7 +212,7 @@ def X():
 
 
 @pytest.fixture(scope="session")
-def y():
+def y() -> np.ndarray:
     n = 1000
     return (np.array(
         [(1.0 * i + 0.0 * (n - i)) / n for i in range(n + 1)]
@@ -217,27 +220,27 @@ def y():
 
 
 @pytest.fixture(scope="session")
-def brier_loss():
+def brier_loss() -> float:
     return 0.08325
 
 
 @pytest.fixture(scope="session")
-def log_loss():
+def log_loss() -> float:
     return 0.30655
 
 
 @pytest.fixture(scope="session")
-def score():
+def score() -> float:
     return 1.0
 
 
 @pytest.fixture(scope="session")
-def threshold():
+def threshold() -> float:
     return 0.5
 
 
 @pytest.fixture(scope="session")
-def RGSCV_results():
+def RGSCV_results() -> Dict[str, Any]:
     results = DataFrame(data={
         'params': [
             {'alpha': 0.0},

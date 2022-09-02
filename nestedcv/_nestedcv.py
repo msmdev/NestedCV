@@ -44,7 +44,7 @@ from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.metrics import f1_score, fbeta_score, log_loss, precision_score
 from sklearn.metrics import precision_recall_curve, recall_score, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, ParameterGrid
-from sklearn.utils import check_array, check_consistent_length, check_X_y, indexable
+from sklearn.utils import check_array, check_X_y, indexable
 from sklearn.metrics._classification import _check_targets
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.metaestimators import _safe_split
@@ -264,16 +264,33 @@ def save_dataframes_to_excel(
         print("The file", fn, "already exists!", sep=" ")
 
 
+def checker(
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Helper function to check/enforce correct input for classification metrics."""
+
+    if not (isinstance(y_true, (list, np.ndarray)) and isinstance(y_pred, (list, np.ndarray))):
+        raise ValueError("y_true, y_pred must be either of type list or np.ndarray.")
+    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
+    if not y_type == "binary":
+        raise ValueError(f"{y_type} is not supported")
+    if not isinstance(y_true, np.ndarray):
+        y_true = np.asarray(y_true)
+    if not isinstance(y_pred, np.ndarray):
+        y_pred = np.asarray(y_pred)
+    if not y_true.ndim == y_pred.ndim == 1:
+        raise ValueError("y_true, y_pred must be one-dimensional.")
+    return y_true, y_pred
+
+
 def specificity(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
     """sklearn-compartible function to calculate the specificity = (TN / (TN + FP))."""
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     TN, FP, _, _ = confusion_matrix(
         y_true, y_pred, labels=None, sample_weight=None, normalize=None
@@ -338,8 +355,8 @@ def Fbeta(
 
 
 def matthews_corrcoef(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
     sample_weight: Optional[np.ndarray] = None
 ) -> float:
     """Compute the Matthews correlation coefficient (MCC).
@@ -368,10 +385,7 @@ def matthews_corrcoef(
     Implementation based on sklearn.metrics.matthews_corrcoef (version 1.0.2).
     """
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred, sample_weight)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     C = confusion_matrix(y_true, y_pred, sample_weight=sample_weight)
     t_sum = C.sum(axis=1, dtype=np.float64)
@@ -391,14 +405,11 @@ def matthews_corrcoef(
 
 
 def negative_predictive_value(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     TN, _, FN, _ = confusion_matrix(
         y_true, y_pred, labels=None, sample_weight=None, normalize=None
@@ -416,14 +427,11 @@ def negative_predictive_value(
 
 
 def informedness(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     tpr = recall_score(y_true, y_pred, labels=None, pos_label=1, average='binary',
                        sample_weight=None, zero_division='warn')
@@ -434,14 +442,11 @@ def informedness(
 
 
 def markedness(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
+    y_true: Union[List[Any], np.ndarray],
+    y_pred: Union[List[Any], np.ndarray],
 ) -> float:
 
-    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
-    check_consistent_length(y_true, y_pred)
-    if not y_type == "binary":
-        raise ValueError("%s is not supported" % y_type)
+    y_true, y_pred = checker(y_true, y_pred)
 
     ppv = precision_score(y_true, y_pred, labels=None, pos_label=1, average='binary',
                           sample_weight=None, zero_division='warn')
@@ -738,7 +743,9 @@ class RepeatedGridSearchCV:
             param_grid: Union[Dict[str, List[Any]], List[Dict[str, List[Any]]]],
             *,
             scoring: Union[List[str], str] = 'precision_recall_auc',
-            cv: BaseCrossValidator = StratifiedKFold(n_splits=5, shuffle=True),
+            cv: Union[
+                BaseCrossValidator, List[BaseCrossValidator], int
+            ] = StratifiedKFold(n_splits=5, shuffle=True),
             n_jobs: Optional[int] = None,
             Nexp: int = 10,
             save_to: Optional[Dict[str, str]] = None,
@@ -808,15 +815,15 @@ class RepeatedGridSearchCV:
         if not y_type == "binary":
             raise ValueError("Currently only binary targets are supported.")
 
-        grid = list(ParameterGrid(param_grid=self.param_grid))
+        grid: List[Dict[str, Any]] = list(ParameterGrid(param_grid=self.param_grid))
 
-        cv_results = {}
+        cv_results: Dict[str, Union[List[Dict[str, Any]], np.ndarray]] = {}
         cv_results['params'] = grid
         for i, param_dict in enumerate(grid):
             for key in param_dict.keys():
                 if key not in cv_results.keys():
                     cv_results[key] = np.ma.MaskedArray(
-                        np.full(len(grid), np.nan, dtype=np.object), mask=True
+                        np.full(len(grid), np.nan, dtype=object), mask=True
                     )
                     cv_results[key][i] = param_dict[key]
                 else:
@@ -869,6 +876,8 @@ class RepeatedGridSearchCV:
                     else:
                         raise TypeError("'estimator' should be an estimator implementing "
                                         "'predict_proba' method, %r was passed" % self.estimator)
+        if not (collect_predictions or collect_probabilities):
+            raise ValueError("Neither Predictions nor Probabilities are collected.")
 
         # 1. Repeat the following process Nexp times
         for nexp in range(self.Nexp):
@@ -990,25 +999,13 @@ class RepeatedGridSearchCV:
                 y_tests_list.append(y_tests)
 
             # collect probabilties and labels belonging to each point of the grid
-            if collect_predictions and collect_probabilities:
-                Predictions: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-                Probabilities: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-            elif collect_predictions and not collect_probabilities:
-                Predictions: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-                Probabilities = None
-            elif not collect_predictions and collect_probabilities:
-                Predictions = None
-                Probabilities: Dict[str, List[float]] = {
-                    str(tuple(sorted(x.items()))): [] for x in grid
-                }
-            else:
-                raise ValueError("Neither Predictions nor Probabilities are collected.")
+            Predictions: Dict[str, List[float]] = {
+                str(tuple(sorted(x.items()))): [] for x in grid
+            }
+            Probabilities: Dict[str, List[float]] = {
+                str(tuple(sorted(x.items()))): [] for x in grid
+            }
+
             y_D: Dict[str, List[float]] = {
                     str(tuple(sorted(x.items()))): [] for x in grid
                 }
@@ -1063,21 +1060,29 @@ class RepeatedGridSearchCV:
                             )
                         )
                     elif scoring == 'pseudo_f1':
-                        param_scores[scoring].append(Fbeta(
+                        fbeta = Fbeta(
                             specificity(y_D[key], Predictions[key]),
                             recall_score(y_D[key], Predictions[key], labels=None, pos_label=1,
                                          average='binary', sample_weight=None,
                                          zero_division='warn'),
-                            beta=1.0)
+                            beta=1.0
                         )
+                        if isinstance(fbeta, float):
+                            param_scores[scoring].append(fbeta)
+                        else:
+                            raise ValueError("Fbeta() returned an array but a float was expected")
                     elif scoring == 'pseudo_f2':
-                        param_scores[scoring].append(Fbeta(
+                        fbeta = Fbeta(
                             specificity(y_D[key], Predictions[key]),
                             recall_score(y_D[key], Predictions[key], labels=None, pos_label=1,
                                          average='binary', sample_weight=None,
                                          zero_division='warn'),
-                            beta=2.0)
+                            beta=2.0
                         )
+                        if isinstance(fbeta, float):
+                            param_scores[scoring].append(fbeta)
+                        else:
+                            raise ValueError("Fbeta() returned an array but a float was expected")
                     elif scoring == 'sensitivity':
                         param_scores[scoring].append(recall_score(
                             y_D[key], Predictions[key], labels=None, pos_label=1,
@@ -1101,9 +1106,9 @@ class RepeatedGridSearchCV:
                 cv_results['iteration'+str(nexp)+'_'+scoring] = np.array(param_scores[scoring])
                 scores[scoring].append(np.array(param_scores[scoring]))
 
-        opt_scores = dict()
-        opt_scores_idcs = dict()
-        opt_params = dict()
+        opt_scores: Dict[str, float] = dict()
+        opt_scores_idcs: Dict[str, int] = dict()
+        opt_params: Dict[str, Dict[str, Any]] = dict()
         for scoring in scorings:
             score_array = np.array(scores[scoring])
 
@@ -1120,12 +1125,13 @@ class RepeatedGridSearchCV:
             # 3. Let α’ be the α value for which either
             # the average score is maximal or
             # the average loss is minimal.
+            opt_score_idx: int
             if bool(re.search(r'loss', scoring)):
                 opt_score = np.amin(mean_score)
-                opt_score_idx = np.argmin(mean_score)
+                opt_score_idx = int(np.argmin(mean_score))
             else:
                 opt_score = np.amax(mean_score)
-                opt_score_idx = np.argmax(mean_score)
+                opt_score_idx = int(np.argmax(mean_score))
             # If there are multiple α values for which the average score/loss is optimal,
             # then α’ is the one with the lowest standard deviation of the score/loss.
             if np.any(mean_score == opt_score):
@@ -1561,8 +1567,18 @@ class RepeatedStratifiedNestedCV:
             if key not in cv_options_keys:
                 raise ValueError(f"Unknown cv_options key '{key}'.")
 
-        self.collect_rules = cv_options.get('collect_rules', False)
-        inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
+        # ------------------------------
+        # Define and collect CV options:
+        # ------------------------------
+        self.Nexp1: int = cv_options.get('Nexp1', 10)
+
+        self.Nexp2: int = cv_options.get('Nexp2', 10)
+
+        self.collect_rules: bool = cv_options.get('collect_rules', False)
+
+        inner_cv: Union[
+                BaseCrossValidator, List[BaseCrossValidator], int
+            ] = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(inner_cv, numbers.Number):
             self.inner_cv = StratifiedKFold(n_splits=inner_cv, shuffle=True)
         elif issubclass(type(inner_cv), BaseCrossValidator):
@@ -1585,10 +1601,10 @@ class RepeatedStratifiedNestedCV:
             raise ValueError("The value of the 'inner_cv' key must be either an integer, "
                              "to specify the number of folds, a CV splitter, or a list of "
                              "CV splitters of length Nexp1.")
-        self.n_jobs = cv_options.get('n_jobs', None)
-        self.Nexp1 = cv_options.get('Nexp1', 10)
-        self.Nexp2 = cv_options.get('Nexp2', 10)
-        outer_cv = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
+
+        outer_cv: Union[
+                BaseCrossValidator, List[BaseCrossValidator], int
+            ] = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(outer_cv, numbers.Number):
             self.outer_cv = StratifiedKFold(n_splits=outer_cv, shuffle=True)
         elif issubclass(type(outer_cv), BaseCrossValidator):
@@ -1611,23 +1627,36 @@ class RepeatedStratifiedNestedCV:
             raise ValueError("The value of the 'outer_cv' key must be either an integer, "
                              "to specify the number of folds, a CV splitter, or a list of "
                              "CV splitters of length Nexp2.")
-        self.refit = cv_options.get('refit', False)
+
+        self.n_jobs: int = cv_options.get('n_jobs', None)
+
+        self.refit: Union[bool, str] = cv_options.get('refit', False)
         if not isinstance(self.refit, bool) and not isinstance(self.refit, str):
             raise ValueError("The value of the 'refit' key must bei either boolean or str.")
-        self.reproducible = cv_options.get('reproducible', False)
-        self.save_best_estimator = cv_options.get('save_best_estimator', None)
+
+        self.reproducible: bool = cv_options.get('reproducible', False)
+
+        self.save_best_estimator: Optional[
+            Dict[str, str]
+        ] = cv_options.get('save_best_estimator', None)
         if self.save_best_estimator is not None and not isinstance(self.save_best_estimator, dict):
             raise ValueError(
                 "The value of the 'save_best_estimator' key must bei either a dict or None."
             )
         if not self.refit and self.save_best_estimator is not None:
             raise ValueError("Can't save best estimator, if 'refit' is set to False.")
-        self.save_inner_to = cv_options.get('save_inner_to', None)
-        self.save_pr_plots = cv_options.get('save_pr_plots', None)
-        self.save_pred = cv_options.get('save_pred', None)
-        self.save_to = cv_options.get('save_to', None)
-        self.save_tt_plots = cv_options.get('save_tt_plots', None)
-        self.scoring = cv_options.get('scoring', 'precision_recall_auc')
+
+        self.save_inner_to: Optional[Dict[str, str]] = cv_options.get('save_inner_to', None)
+
+        self.save_pr_plots: Optional[Dict[str, str]] = cv_options.get('save_pr_plots', None)
+
+        self.save_pred: Optional[Dict[str, str]] = cv_options.get('save_pred', None)
+
+        self.save_to: Optional[Dict[str, str]] = cv_options.get('save_to', None)
+
+        self.save_tt_plots: Optional[Dict[str, str]] = cv_options.get('save_tt_plots', None)
+
+        self.scoring: Union[str, List[str]] = cv_options.get('scoring', 'precision_recall_auc')
         if isinstance(self.scoring, str):
             if not isinstance(self.refit, bool):
                 raise ValueError("The value of the 'refit' key must be boolean "
@@ -1647,7 +1676,10 @@ class RepeatedStratifiedNestedCV:
         else:
             raise ValueError("The value of the 'scoring' key must be a single str out of %s or "
                              "a list thereof." % ', '.join(self.metrics))
-        self.threshold_tuning_scoring = cv_options.get('threshold_tuning_scoring', 'f2')
+
+        self.threshold_tuning_scoring: Optional[
+            Union[str, List[Union[str, None]]]
+        ] = cv_options.get('threshold_tuning_scoring', 'f2')
         if (not (isinstance(self.threshold_tuning_scoring, str) or
                  isinstance(self.threshold_tuning_scoring, list))):
             raise ValueError(
@@ -1656,13 +1688,17 @@ class RepeatedStratifiedNestedCV:
                 % (', '.join(self.threshold_tuning_metrics),
                    ','.join(self.threshold_tuning_metrics))
             )
-        self.tune_threshold = cv_options.get('tune_threshold', True)
+
+        self.tune_threshold: bool = cv_options.get('tune_threshold', True)
         if not isinstance(self.tune_threshold, bool):
             raise ValueError("The value of the 'tune_threshold' key must be boolean.")
         # set threshold_tuning_scoring to None (just a safety precaution),
         # if no threshold tuning is requested
         if not self.tune_threshold:
             self.threshold_tuning_scoring = None
+        # ------------------------------
+        # End of CV options definitions.
+        # ------------------------------
 
     # to convert array of dict to dict with array values,
     # so it can be used as params for parameter tuning
@@ -1725,10 +1761,19 @@ class RepeatedStratifiedNestedCV:
         precision, recall, threshold = precision_recall_curve(y_train, y_proba_train,
                                                               pos_label=1, sample_weight=None)
         # convert to f-beta score
+        fbeta: np.ndarray
         if score == 'f1':
-            fbeta: np.ndarray = Fbeta(precision, recall, beta=1.0)
+            temp = Fbeta(precision, recall, beta=1.0)
+            if isinstance(temp, np.ndarray):
+                fbeta = temp
+            else:
+                raise ValueError("Fbeta() returned a float but an array was expected")
         elif score == 'f2':
-            fbeta = Fbeta(precision, recall, beta=2.0)
+            temp = Fbeta(precision, recall, beta=2.0)
+            if isinstance(temp, np.ndarray):
+                fbeta = temp
+            else:
+                raise ValueError("Fbeta() returned a float but an array was expected")
         else:
             raise ValueError("Score for tuning the threshold on the Precision-Recall curve "
                              "must be either 'f1' or 'f2'")
@@ -1736,7 +1781,7 @@ class RepeatedStratifiedNestedCV:
         idx = np.argmax(fbeta)
         best_threshold = threshold[idx]
         best_fbeta = fbeta[idx]
-        if isinstance(ID, str):
+        if isinstance(ID, str) and self.save_pr_plots is not None:
             # plot the precision recall curve on for the model (on X_train)
             no_skill_level = float(len(y_train[y_train == 1])) / float(len(y_train))
             fn = ID + '_Precision-Recall'
@@ -1798,7 +1843,7 @@ class RepeatedStratifiedNestedCV:
         idx = np.argmax(scores)
         best_threshold = threshold[idx]
         best_score = scores[idx]
-        if isinstance(ID, str):
+        if isinstance(ID, str) and self.save_pr_plots is not None:
             # plot the roc for the model (on X_train)
             fn = ID + '_ROC'
             plot_roc_curve(
@@ -1826,6 +1871,55 @@ class RepeatedStratifiedNestedCV:
         y_train: np.ndarray,
         threshold: Optional[float] = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Internal helper function to generate predictions
+        (and probabilities, if the estimator supports it) for a train and a test set,
+        taking a decision threshold (if supplied) - applied on the probabilities to
+        generate the predictions - into account (if the estimator supports probabilities).
+
+        Parameters
+        ----------
+        X_test : numpy.ndarray of shape (n_samples_test, n_features) or
+        (n_samples_test, n_samples_test)
+            Testing matrix, where n_samples_test is the number of samples and n_features
+            is the number of features. For SVM models with `kernel='precomputed'`,
+            the expected shape of `X` is (n_samples_test, n_samples_test).
+
+        y_test : numpy.ndarray of shape (n_samples_test,)
+            Target values relative to `X_test`.
+
+        X_train : numpy.ndarray of shape (n_samples_train, n_features) or
+        (n_samples_train, n_samples_train)
+            Training matrix, where n_samples_train is the number of samples and n_features
+            is the number of features. For SVM models with `kernel='precomputed'`,
+            the expected shape of `X` is (n_samples_train, n_samples_train).
+
+        y_train : numpy.ndarray of shape (n_samples_train,)
+            Target values relative to `X_train`.
+
+        Returns
+        -------
+        y_proba_test : numpy.ndarray
+            Result of calling `predict_proba` on the estimator
+            or final estimator of the pipeline using the test data.
+            If the estimator doesn't support probabilities,
+            numpyp.full((y_test.shape[0],), fill_value=numpyp.nan)
+            will be returned.
+
+        y_pred_test : numpy.ndarray
+            Result of calling `predict` on the estimator
+            or final estimator of the pipeline using the test data.
+
+        y_proba_train : numpy.ndarray
+            Result of calling `predict_proba` on the estimator
+            or final estimator of the pipeline using the train data.
+            If the estimator doesn't support probabilities,
+            numpyp.full((y_train.shape[0],), fill_value=numpyp.nan)
+            will be returned.
+
+        y_pred_train : numpy.ndarray
+            Result of calling `predict` on the estimator
+            or final estimator of the pipeline using the train data.
+        """
         assert X_train.shape[0] == y_train.shape[0], \
             "X_train.shape[0] != y_train.shape[0] in _predict."
         assert X_test.shape[0] == y_test.shape[0], \
@@ -1856,17 +1950,29 @@ class RepeatedStratifiedNestedCV:
             y_proba_test = np.full((y_test.shape[0],), fill_value=np.nan)
             # predict test classes
             y_pred_test = self.estimator.predict(X_test)
-        return y_proba_train, y_pred_train, y_proba_test, y_pred_test
+        return y_proba_test, y_pred_test, y_proba_train, y_pred_train
 
     def _score(
         self,
-        y: Union[np.ndarray, float],
-        y_pred: Union[np.ndarray, float],
-        y_proba: Union[np.ndarray, float] = np.nan,
+        y: Union[List[float], np.ndarray],
+        y_pred: Union[List[float], np.ndarray],
+        y_proba: Optional[Union[List[float], np.ndarray]] = None,
         scoring: str = 'mcc',
     ) -> float:
+
+        y, y_pred = checker(y, y_pred)
+        if y_proba is not None:
+            if not isinstance(y_proba, (list, np.ndarray)):
+                raise ValueError("y_prob must be either of type list or numpyp.ndarray.")
+            if not isinstance(y_proba, np.ndarray):
+                y_proba = np.asarray(y_proba)
+            if not y_proba.ndim == 1:
+                raise ValueError("y_proba must be one-dimensional.")
+            if not y_proba.shape == y.shape:
+                raise ValueError("y and y_proba must have the same length.")
+
         if scoring == 'average_precision':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = average_precision_score(
                     y, y_proba, average=None, pos_label=1, sample_weight=None
                 )
@@ -1877,7 +1983,7 @@ class RepeatedStratifiedNestedCV:
                 y, y_pred, sample_weight=None, adjusted=False
             )
         elif scoring == 'brier_loss':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = brier_score_loss(y, y_proba, sample_weight=None, pos_label=1)
             else:
                 score = np.nan
@@ -1900,7 +2006,7 @@ class RepeatedStratifiedNestedCV:
                y, y_pred, sample_weight=None
             )
         elif scoring == 'log_loss':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = log_loss(
                     y, y_proba, eps=1e-15, normalize=True, sample_weight=None, labels=None
                 )
@@ -1914,7 +2020,7 @@ class RepeatedStratifiedNestedCV:
                 sample_weight=None, zero_division='warn'
             )
         elif scoring == 'precision_recall_auc':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 precision, recall, _ = precision_recall_curve(y, y_proba,
                                                               pos_label=1,
                                                               sample_weight=None)
@@ -1938,7 +2044,7 @@ class RepeatedStratifiedNestedCV:
                 beta=2.0
             )
         elif scoring == 'roc_auc':
-            if not np.isnan(y_proba).any():
+            if y_proba is not None:
                 score = roc_auc_score(
                     y, y_proba, average=None, sample_weight=None, max_fpr=None, labels=None
                 )
@@ -1966,11 +2072,22 @@ class RepeatedStratifiedNestedCV:
         which maximize the threshold tuning scoring on the outer training
         folds for the best parameters (rank 1) found during grid search,
         is used as decision threshold for class prediction.
+
         Parameters
         ----------
-        X : indexable, length n_samples
-            Must fulfill the input assumptions of the
-            underlying estimator.
+        X : numpy.ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+            Data to predict on. Must fulfill the input requirements of the estimator
+            or the first step of the pipeline (if a pipeline was supplied).
+            For SVM estimators with `kernel='precomputed'`, the expected shape
+            of `X` is (n_samples_test, n_samples_train).
+
+        Returns
+        -------
+        y_pred : numpy.ndarray
+            Result of calling `predict` (or `predict_proba` and applying a
+            determined decision threshold on the probabilities to convert
+            them into predictions) on the estimator or final estimator of
+            the pipeline.
         """
         # Check, if fit had been called
         check_is_fitted(self)
@@ -1997,11 +2114,20 @@ class RepeatedStratifiedNestedCV:
         """Call predict_proba on the estimator with the best found parameters.
         Only available if ``cv_options['refit']=True`` and the underlying
         estimator supports ``predict_proba``.
+
         Parameters
         ----------
-        X : indexable, length n_samples
-            Must fulfill the input assumptions of the
-            underlying estimator.
+        X : numpy.ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+            Data to predict on. Must fulfill the input requirements of the estimator
+            or the first step of the pipeline (if a pipeline was supplied).
+            For SVM estimators with `kernel='precomputed'`, the expected shape
+            of `X` is (n_samples_test, n_samples_train).
+
+        Returns
+        -------
+        y_proba : numpy.ndarray of shape (n_samples, n_classes)
+            Result of calling `predict_proba` on the estimator
+            or final estimator of the pipeline.
         """
         # Check, if fit had been called
         check_is_fitted(self)
@@ -2031,12 +2157,14 @@ class RepeatedStratifiedNestedCV:
 
         Parameters
         ----------
-        X : numpy.ndarray of shape (n_samples, n_features)
-            Training vector, where n_samples is the number of samples and
-            n_features is the number of features.
+        X : numpy.ndarray of shape (n_samples, n_features) or (n_samples, n_samples)
+            Traiming matrix. Must fulfill the input requirements of the estimator
+            or the first step of the pipeline (if a pipeline was supplied).
+            For SVM estimators with `kernel='precomputed'`, the expected shape
+            of `X` is (n_samples_test, n_samples_train).
 
-        y : numpy.ndarray of shape (n_samples, n_output) or (n_samples,)
-            Target relative to X for classification.
+        y : numpy.ndarray of shape (n_samples,)
+            Target values relative to `X`.
 
         baseline_prediction : None or numpy.ndarray of shape (n_samples,), default=None
             Given baseline prediction of the target.
@@ -2067,14 +2195,14 @@ class RepeatedStratifiedNestedCV:
 
         ranked_best_inner_params_
             Ranked (most frequent first) best inner params as a list of
-            dictionaries (every dict, i.e. parameter combination,
+            dictionaries (every dict, i.e., parameter combination,
             occurs only once).
 
         best_inner_params_
             Best inner params for each outer loop as a list of dictionaries.
 
         best_thresholds_
-            If cv_options['tune_threshold']=True, this is a dict containing the best thresholds
+            If `cv_options['tune_threshold']=True`, this is a dict containing the best thresholds
             and threshold-tuning-scorings for each scoring-threshold_tuning_scoring-pair.
             Given as a dict with scorings as keys and dicts as values. Each of these dicts
             given as {'best_<threshold_tuning_scoring>': value, 'best_theshold': value}
@@ -2084,14 +2212,14 @@ class RepeatedStratifiedNestedCV:
             Else the dict is empty.
 
         best_estimator_
-            If cv_options['refit'] is set to True or a str denoting a valid scoring metric,
+            If `cv_options['refit']` is set to True or a str denoting a valid scoring metric,
             this gives the best estimator refitted on the whole dataset using
             the best parameters (rank 1) found during grid search.
             For multiple metric evaluation, the scoring given via the refit key
             is used to find the best parameters for refitting the estimator at the end.
 
         mean_best_threshold_
-            If cv_options['refit'] is set to True or a str denoting a valid scoring metric,
+            If `cv_options['refit']` is set to True or a str denoting a valid scoring metric,
             this gives the mean of the best thresholds, which maximize the threshold
             tuning scoring on the outer training folds for the best parameters (rank 1)
             found during grid search.
@@ -2099,18 +2227,18 @@ class RepeatedStratifiedNestedCV:
             is used to find the best parameters.
 
         repeated_cv_results_lists_
-            List of Nexp2 lists of n_split_outer dicts. Each dict contains the
-            compiled results of Nexp1 iterations of n_split_inner-fold cross-
+            List of `Nexp2` lists of `n_split_outer` dicts. Each dict contains the
+            compiled results of `Nexp1` iterations of `n_split_inner`-fold cross-
             validated grid searches with keys as column headers and values as columns.
             Each of those dicts can be imported into a pandas DataFrame.
 
         repeated_cv_results_as_dataframes_list_
-            List of Nexp2 lists of n_split_outer pandas dataframes containing
-            the compiled results of of Nexp1 iterations of n_split_inner-fold
+            List of `Nexp2` lists of `n_split_outer` pandas dataframes containing
+            the compiled results of of `Nexp1` iterations of `n_split_inner`-fold
             cross-validated grid searches.
 
         repeated_nested_cv_results_
-            A list of Nexp2 dicts of compiled nested CV results.
+            A list of `Nexp2` dicts of compiled nested CV results.
         """
 
         if isinstance(X, pd.DataFrame):
@@ -2369,13 +2497,15 @@ class RepeatedStratifiedNestedCV:
                 y_D = []
                 rules_list = []
 
-                # if threshold is tuned, plot all specificity-recall-plots together
+                # if requested and if threshold is tuned,
+                # plot all specificity-recall-plots together
                 if self.tune_threshold is True and isinstance(self.save_tt_plots, dict):
                     # markers = ['.', 'o', 'v', '^', '>', '<', 's', '*', 'x', 'D']
                     plt.figure(figsize=(8, 8))
                 for i, (train, test) in enumerate(zip(train_indices, test_indices)):
-                    y_dict = dict()
-                    X_dict = dict()
+                    y_dict: Dict[str, np.ndarray] = dict()
+                    X_dict: Dict[str, np.ndarray] = dict()
+                    # TODO: assert that the last step of the pipline is indeed an estimator
                     if isinstance(self.estimator, sklearn.pipeline.Pipeline):
                         X_dict['train'], y_dict['train'] = _safe_split(
                             self.estimator.steps[-1][1], X, y, train
@@ -2484,10 +2614,10 @@ class RepeatedStratifiedNestedCV:
                         best_threshold = None
                     # generate train/test predictions and probabilities
                     y_p: Dict[str, Dict[str, np.ndarray]] = {'pred': dict(), 'proba': dict()}
-                    (y_p['proba']['train'],
-                     y_p['pred']['train'],
-                     y_p['proba']['test'],
-                     y_p['pred']['test']) = self._predict(
+                    (y_p['proba']['test'],
+                     y_p['pred']['test'],
+                     y_p['proba']['train'],
+                     y_p['pred']['train']) = self._predict(
                         X_dict['test'], y_dict['test'], X_dict['train'], y_dict['train'],
                         threshold=best_threshold
                     )
@@ -2762,17 +2892,18 @@ class RepeatedStratifiedNestedCV:
                 else:
                     self.mean_best_threshold_ = None
             else:
-                # Set best hyperparameters
-                self.estimator.set_params(**self.ranked_best_inner_params_[
-                    self.scoring][0]['parameters'])
-                # Fit model with best hyperparameters
-                self.estimator.fit(X, y)
-                self.best_estimator_ = self.estimator
-                if self.tune_threshold is True:
-                    self.mean_best_threshold_ = repeated_nested_cv_results[
-                        self.scoring]['mean_best_threshold']
-                else:
-                    self.mean_best_threshold_ = None
+                if isinstance(self.scoring, str):
+                    # Set best hyperparameters
+                    self.estimator.set_params(**self.ranked_best_inner_params_[
+                        self.scoring][0]['parameters'])
+                    # Fit model with best hyperparameters
+                    self.estimator.fit(X, y)
+                    self.best_estimator_ = self.estimator
+                    if self.tune_threshold is True:
+                        self.mean_best_threshold_ = repeated_nested_cv_results[
+                            self.scoring]['mean_best_threshold']
+                    else:
+                        self.mean_best_threshold_ = None
             if isinstance(self.save_best_estimator, dict):
                 if isinstance(self.refit, str):
                     filename = f"{self.save_best_estimator['ID']}_{self.refit}_best_estimator"
