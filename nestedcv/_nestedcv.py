@@ -1567,11 +1567,18 @@ class RepeatedStratifiedNestedCV:
             if key not in cv_options_keys:
                 raise ValueError(f"Unknown cv_options key '{key}'.")
 
-        self.n_jobs = cv_options.get('n_jobs', None)
-        self.Nexp1 = cv_options.get('Nexp1', 10)
-        self.Nexp2 = cv_options.get('Nexp2', 10)
-        self.collect_rules = cv_options.get('collect_rules', False)
-        inner_cv = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
+        # ------------------------------
+        # Define and collect CV options:
+        # ------------------------------
+        self.Nexp1: int = cv_options.get('Nexp1', 10)
+
+        self.Nexp2: int = cv_options.get('Nexp2', 10)
+
+        self.collect_rules: bool = cv_options.get('collect_rules', False)
+
+        inner_cv: Union[
+                BaseCrossValidator, List[BaseCrossValidator], int
+            ] = cv_options.get('inner_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(inner_cv, numbers.Number):
             self.inner_cv = StratifiedKFold(n_splits=inner_cv, shuffle=True)
         elif issubclass(type(inner_cv), BaseCrossValidator):
@@ -1594,7 +1601,10 @@ class RepeatedStratifiedNestedCV:
             raise ValueError("The value of the 'inner_cv' key must be either an integer, "
                              "to specify the number of folds, a CV splitter, or a list of "
                              "CV splitters of length Nexp1.")
-        outer_cv = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
+
+        outer_cv: Union[
+                BaseCrossValidator, List[BaseCrossValidator], int
+            ] = cv_options.get('outer_cv', StratifiedKFold(n_splits=5, shuffle=True))
         if isinstance(outer_cv, numbers.Number):
             self.outer_cv = StratifiedKFold(n_splits=outer_cv, shuffle=True)
         elif issubclass(type(outer_cv), BaseCrossValidator):
@@ -1617,23 +1627,36 @@ class RepeatedStratifiedNestedCV:
             raise ValueError("The value of the 'outer_cv' key must be either an integer, "
                              "to specify the number of folds, a CV splitter, or a list of "
                              "CV splitters of length Nexp2.")
-        self.refit = cv_options.get('refit', False)
+
+        self.n_jobs: int = cv_options.get('n_jobs', None)
+
+        self.refit: Union[bool, str] = cv_options.get('refit', False)
         if not isinstance(self.refit, bool) and not isinstance(self.refit, str):
             raise ValueError("The value of the 'refit' key must bei either boolean or str.")
-        self.reproducible = cv_options.get('reproducible', False)
-        self.save_best_estimator = cv_options.get('save_best_estimator', None)
+
+        self.reproducible: bool = cv_options.get('reproducible', False)
+
+        self.save_best_estimator: Optional[
+            Dict[str, str]
+        ] = cv_options.get('save_best_estimator', None)
         if self.save_best_estimator is not None and not isinstance(self.save_best_estimator, dict):
             raise ValueError(
                 "The value of the 'save_best_estimator' key must bei either a dict or None."
             )
         if not self.refit and self.save_best_estimator is not None:
             raise ValueError("Can't save best estimator, if 'refit' is set to False.")
-        self.save_inner_to = cv_options.get('save_inner_to', None)
-        self.save_pr_plots = cv_options.get('save_pr_plots', None)
-        self.save_pred = cv_options.get('save_pred', None)
-        self.save_to = cv_options.get('save_to', None)
-        self.save_tt_plots = cv_options.get('save_tt_plots', None)
-        self.scoring = cv_options.get('scoring', 'precision_recall_auc')
+
+        self.save_inner_to: Optional[Dict[str, str]] = cv_options.get('save_inner_to', None)
+
+        self.save_pr_plots: Optional[Dict[str, str]] = cv_options.get('save_pr_plots', None)
+
+        self.save_pred: Optional[Dict[str, str]] = cv_options.get('save_pred', None)
+
+        self.save_to: Optional[Dict[str, str]] = cv_options.get('save_to', None)
+
+        self.save_tt_plots: Optional[Dict[str, str]] = cv_options.get('save_tt_plots', None)
+
+        self.scoring: Union[str, List[str]] = cv_options.get('scoring', 'precision_recall_auc')
         if isinstance(self.scoring, str):
             if not isinstance(self.refit, bool):
                 raise ValueError("The value of the 'refit' key must be boolean "
@@ -1653,7 +1676,10 @@ class RepeatedStratifiedNestedCV:
         else:
             raise ValueError("The value of the 'scoring' key must be a single str out of %s or "
                              "a list thereof." % ', '.join(self.metrics))
-        self.threshold_tuning_scoring = cv_options.get('threshold_tuning_scoring', 'f2')
+
+        self.threshold_tuning_scoring: Optional[
+            Union[str, List[Union[str, None]]]
+        ] = cv_options.get('threshold_tuning_scoring', 'f2')
         if (not (isinstance(self.threshold_tuning_scoring, str) or
                  isinstance(self.threshold_tuning_scoring, list))):
             raise ValueError(
@@ -1662,13 +1688,17 @@ class RepeatedStratifiedNestedCV:
                 % (', '.join(self.threshold_tuning_metrics),
                    ','.join(self.threshold_tuning_metrics))
             )
-        self.tune_threshold = cv_options.get('tune_threshold', True)
+
+        self.tune_threshold: bool = cv_options.get('tune_threshold', True)
         if not isinstance(self.tune_threshold, bool):
             raise ValueError("The value of the 'tune_threshold' key must be boolean.")
         # set threshold_tuning_scoring to None (just a safety precaution),
         # if no threshold tuning is requested
         if not self.tune_threshold:
             self.threshold_tuning_scoring = None
+        # ------------------------------
+        # End of CV options definitions.
+        # ------------------------------
 
     # to convert array of dict to dict with array values,
     # so it can be used as params for parameter tuning
@@ -1751,7 +1781,7 @@ class RepeatedStratifiedNestedCV:
         idx = np.argmax(fbeta)
         best_threshold = threshold[idx]
         best_fbeta = fbeta[idx]
-        if isinstance(ID, str):
+        if isinstance(ID, str) and self.save_pr_plots is not None:
             # plot the precision recall curve on for the model (on X_train)
             no_skill_level = float(len(y_train[y_train == 1])) / float(len(y_train))
             fn = ID + '_Precision-Recall'
@@ -1772,6 +1802,8 @@ class RepeatedStratifiedNestedCV:
                 recall_marker_label='Recall=%.6f\nThreshold=%.6f' % (recall[idx], best_threshold),
                 directory=self.save_pr_plots['directory'], filename=fn, timestamp=timestamp
             )
+        else:
+            warnings.warn("Couldn't plot precision-recall-threshold-tuning-curves.")
         return precision, recall, threshold, best_threshold, best_fbeta
 
     def _tune_threshold_by_roc(
@@ -1813,7 +1845,7 @@ class RepeatedStratifiedNestedCV:
         idx = np.argmax(scores)
         best_threshold = threshold[idx]
         best_score = scores[idx]
-        if isinstance(ID, str):
+        if isinstance(ID, str) and self.save_pr_plots is not None:
             # plot the roc for the model (on X_train)
             fn = ID + '_ROC'
             plot_roc_curve(
@@ -1831,6 +1863,8 @@ class RepeatedStratifiedNestedCV:
                 recall_marker_label='Recall=%.6f\nThreshold=%.6f' % (tpr[idx], best_threshold),
                 directory=self.save_pr_plots['directory'], filename=fn, timestamp=timestamp
             )
+        else:
+            warnings.warn("Couldn't plot ROC-threshold-tuning-curves.")
         return fpr, tpr, threshold, best_threshold, best_score
 
     def _predict(
@@ -2861,17 +2895,18 @@ class RepeatedStratifiedNestedCV:
                 else:
                     self.mean_best_threshold_ = None
             else:
-                # Set best hyperparameters
-                self.estimator.set_params(**self.ranked_best_inner_params_[
-                    self.scoring][0]['parameters'])
-                # Fit model with best hyperparameters
-                self.estimator.fit(X, y)
-                self.best_estimator_ = self.estimator
-                if self.tune_threshold is True:
-                    self.mean_best_threshold_ = repeated_nested_cv_results[
-                        self.scoring]['mean_best_threshold']
-                else:
-                    self.mean_best_threshold_ = None
+                if isinstance(self.scoring, str):
+                    # Set best hyperparameters
+                    self.estimator.set_params(**self.ranked_best_inner_params_[
+                        self.scoring][0]['parameters'])
+                    # Fit model with best hyperparameters
+                    self.estimator.fit(X, y)
+                    self.best_estimator_ = self.estimator
+                    if self.tune_threshold is True:
+                        self.mean_best_threshold_ = repeated_nested_cv_results[
+                            self.scoring]['mean_best_threshold']
+                    else:
+                        self.mean_best_threshold_ = None
             if isinstance(self.save_best_estimator, dict):
                 if isinstance(self.refit, str):
                     filename = f"{self.save_best_estimator['ID']}_{self.refit}_best_estimator"
