@@ -669,7 +669,7 @@ class RepeatedGridSearchCV:
         - a list of CV splitters of length Nexp.
 
     n_jobs : int or None, default=None
-        Number of jobs of GridSearchCV to run in parallel.
+        Number of jobs of RepeatedGridSearchCV to run in parallel.
         ``None`` means ``1`` unless in a joblib.parallel_backend context.
         ``-1`` means using all processors.
 
