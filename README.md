@@ -2,7 +2,7 @@
 
 This package implements a method to perform repeated stratified nested cross-validation for any estimator that implements the scikit-learn estimator interface.
 The method is based on Algorithm 2 from [[Krstajic et al., 2014]](https://doi.org/10.1186/1758-2946-6-10).
-Simple repeated grid-search cross-validation (Algorithm 1, [[Krstajic et al., 2014]](https://doi.org/10.1186/1758-2946-6-10) is supported as well via the `RepeatedGridSearchCV` class.
+Simple repeated grid-search cross-validation (Algorithm 1, [[Krstajic et al., 2014]](https://doi.org/10.1186/1758-2946-6-10)) is supported as well via the `RepeatedGridSearchCV` class.
 
 ## Installation:
 
