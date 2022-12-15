@@ -1,11 +1,12 @@
 # NestedCV: repeated nested stratified cross-validation
 
-This repository implements a method to perform repeated nested stratified cross-validation for any estimator that implements the scikit-learn estimator interface.
+This package implements a method to perform repeated stratified nested cross-validation for any estimator that implements the scikit-learn estimator interface.
 The method is based on Algorithm 2 from [[Krstajic et al., 2014]](https://doi.org/10.1186/1758-2946-6-10).
+Simple repeated grid-search cross-validation (Algorithm 1, [[Krstajic et al., 2014]](https://doi.org/10.1186/1758-2946-6-10) is supported as well via the `RepeatedGridSearchCV` class.
 
 ## Installation:
 
-You can install the package using pip via (note: you must be inside the repository):
+You can install the package using pip via (note: you must be inside the package folder):
 ```bash
 pip install .
 ```
@@ -37,7 +38,7 @@ pytest -v
 
 ## API
 
-The most important class is `RepeatedStratifiedNestedCV`, which provides everything needed to perform repeated nested stratified cross-validation for any estimator that implements the scikit-learn estimator interface.
+The most important class is `RepeatedStratifiedNestedCV`, which provides everything needed to perform repeated stratified nested cross-validation for any estimator that implements the scikit-learn estimator interface.
 
 ### RepeatedStratifiedNestedCV Parameters
 
@@ -220,8 +221,8 @@ ncv.outer_scores
 
 ## Limitations
 
-Currently only data with binary lables is supported (no multiclass support).
+Currently only data with binary labels is supported (no multiclass support).
 
 ## Why should you use nested cross-validation?
 
-Controlling the bias-variance trade-off is an essential and important task in machine learning, as indicated by [[Cawley and Talbot, 2010]](http://jmlr.csail.mit.edu/papers/volume11/cawley10a/cawley10a.pdf). Many articles state that this can be archieved by the use of nested cross-validation, i.e., [Varma and Simon, 2006](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1397873/pdf/1471-2105-7-91.pdf). Futher sources worth reading are esp. [[Krstajic et al., 2014]](https://jcheminf.biomedcentral.com/track/pdf/10.1186/1758-2946-6-10) and [[Varoquaox et al., 2017]](https://arxiv.org/pdf/1606.05201.pdf).
+Controlling the bias-variance trade-off is an essential and important task in machine learning, as indicated by [[Cawley and Talbot, 2010]](http://jmlr.csail.mit.edu/papers/volume11/cawley10a/cawley10a.pdf). Many articles state that this can be archieved by the use of nested cross-validation, i.e., [Varma and Simon, 2006](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1397873/pdf/1471-2105-7-91.pdf). Futher sources worth reading are esp. [[Krstajic et al., 2014]](https://jcheminf.biomedcentral.com/articles/10.1186/1758-2946-6-10) and [[Varoquaox et al., 2017]](https://arxiv.org/pdf/1606.05201.pdf).
